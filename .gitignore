@@ -1,0 +1,5 @@
+uploads
+frontend_user_ui/.next
+admin_dashboard/dist
+node_modules
+.env

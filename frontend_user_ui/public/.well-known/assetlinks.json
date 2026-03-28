@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.REDDYMATKA.twa",
+        "sha256_cert_fingerprints": ["A6:F9:95:B4:5D:4B:10:62:DC:2F:07:44:64:13:8B:C6:17:9C:47:48:F9:7D:8F:EC:38:C6:5A:80:A1:DB:C2:7D"]
+      }
+    }]
