@@ -114,7 +114,7 @@ const monthOptions = [
 ];
 
 const titleBarClass =
-  "flex items-center justify-between bg-[#e6cc9c] px-4 py-1 text-[#1b1403] shadow-[0_8px_18px_rgba(184,132,34,0.18)]";
+  "flex items-center justify-between bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-4 py-1 text-[#1b1403] shadow-[0_8px_18px_rgba(184,132,34,0.18)]";
 const selectClass =
   "min-w-[132px] border border-[#d8c28f] bg-white px-4 py-2 text-xs font-semibold text-[#312200] outline-none transition focus:border-[#b88422]";
 
@@ -545,17 +545,11 @@ const HomePage = () => {
       <section>
         <div className="overflow-hidden border border-[#e9dcc0] bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)]">
           <div className="relative mt-2 mb-2 flex justify-center px-3">
-            <h2 className="relative w-full max-w-95 bg-[#e6cc9c] px-[clamp(52px,16vw,112px)] py-2 text-center text-xs font-bold text-black
-
-
-
-
-
- sm:text-sm">
+            <h2 className="relative w-full max-w-95 bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-[clamp(52px,16vw,112px)] py-2 text-center text-xs font-bold text-black sm:text-sm">
               {/* left angled side */}
-              <span className="absolute top-0 -left-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[#e6cc9c] skew-x-[-25deg] sm:-left-2.5"></span>
+              <span className="absolute top-0 -left-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-[-25deg] sm:-left-2.5"></span>
               {/* right angled side */}
-              <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[#e6cc9c] skew-x-25 sm:-right-2.5"></span>
+              <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-25 sm:-right-2.5"></span>
               <p className="relative z-10 whitespace-nowrap tracking-wide">
                  KING RECORD CHART
               </p>

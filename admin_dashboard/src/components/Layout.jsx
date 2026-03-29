@@ -35,7 +35,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className={`fixed top-0 left-0 z-50 h-full w-64 bg-dark-900 text-white transform transition-transform duration-200 lg:translate-x-0 flex flex-col ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-dark-700">
-          <h1 className="text-xl font-bold text-primary-400">REDDYMATKA </h1>
+          <h1 className="text-xl font-bold text-primary-400">REDDYMATKA</h1>
           <p className="text-sm text-dark-400 mt-1">Admin Panel</p>
         </div>
 

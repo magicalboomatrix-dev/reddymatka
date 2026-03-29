@@ -302,7 +302,7 @@ const LoginAccountPage = () => {
 
   const getTitle = () => {
     switch (step) {
-      case STEPS.PHONE: return 'Login to REDDYMATKA ';
+      case STEPS.PHONE: return 'Login to REDDYMATKA';
       case STEPS.OTP: return authFlow === 'firstMpinSetup' ? 'Verify Mobile Number' : 'Verify OTP';
       case STEPS.PROFILE: return 'Complete Your Profile';
       case STEPS.SET_MPIN: return authFlow === 'firstMpinSetup' ? 'Set Your MPIN' : 'Create Your MPIN';
@@ -310,7 +310,7 @@ const LoginAccountPage = () => {
       case STEPS.FORGOT_MPIN: return 'Forgot MPIN';
       case STEPS.RESET_OTP: return 'Verify OTP';
       case STEPS.RESET_MPIN: return 'Set New MPIN';
-      default: return 'Login to REDDYMATKA ';
+      default: return 'Login to REDDYMATKA';
     }
   };
 

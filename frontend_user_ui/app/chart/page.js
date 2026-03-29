@@ -60,16 +60,10 @@ const ChartPage = () => {
       <div className="bg-white">
         <div className="mx-auto w-full max-w-107.5 ">
           <div className="relative mt-2 mb-2 flex justify-center px-3">
-            <h2 className="relative w-full max-w-95 bg-[#e6cc9c] px-[clamp(52px,16vw,112px)] py-2 text-center text-xs font-bold text-black
+            <h2 className="relative w-full max-w-95 bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-[clamp(52px,16vw,112px)] py-2 text-center text-xs font-bold text-black sm:text-sm">
+              <span className="absolute top-0 -left-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-[-25deg] sm:-left-2.5"></span>
 
-
-
-
-
- sm:text-sm">
-              <span className="absolute top-0 -left-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[#e6cc9c] skew-x-[-25deg] sm:-left-2.5"></span>
-
-              <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[#e6cc9c] skew-x-25 sm:-right-2.5"></span>
+              <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-25 sm:-right-2.5"></span>
 
               <p className="relative z-10 whitespace-nowrap tracking-wide">
                  Record Chart {selectedYear}

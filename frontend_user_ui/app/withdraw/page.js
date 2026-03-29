@@ -240,7 +240,7 @@ const WithDrawPage = () => {
                       </div>
                       <div className="ml-0.75 h-3 w-px bg-[#d6b774]"></div>
                       <div className="flex items-center gap-2">
-                        <span className={`h-2 w-2 ${isApproved ? 'bg-[#15803d]' : isRejected ? 'bg-[#b91c1c]' : 'bg-[#e6cc9c]'} `}></span>
+                        <span className={`h-2 w-2 ${isApproved ? 'bg-[#15803d]' : isRejected ? 'bg-[#b91c1c]' : 'bg-[#b88422]'}`}></span>
                         <span className="font-semibold text-[#111]">{isApproved ? 'Approved' : isRejected ? 'Rejected' : 'Pending'}</span>
                         <span className="text-[#6b5a3a]">{formatDateTime(withdrawItem.updated_at || withdrawItem.created_at)}</span>
                       </div>

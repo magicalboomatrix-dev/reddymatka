@@ -19,7 +19,7 @@ const monaSans = Mona_Sans({
 
 export const metadata = {
   title: "REDDYMATKA",
-  description: "REDDYMATKA  user application",
+  description: "REDDYMATKA user application",
   manifest: "/manifest.json",
 };
 

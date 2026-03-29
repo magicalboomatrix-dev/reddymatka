@@ -26,7 +26,7 @@ function getTwilioConfig() {
     client: twilio(accountSid, authToken),
     from,
     messagingServiceSid,
-    messageTemplate: process.env.TWILIO_OTP_TEMPLATE || 'Your REDDYMATKA  OTP is {{otp}}. Valid for {{expiryMinutes}} minutes.',
+    messageTemplate: process.env.TWILIO_OTP_TEMPLATE || 'Your REDDYMATKA OTP is {{otp}}. Valid for {{expiryMinutes}} minutes.',
   };
 }
 

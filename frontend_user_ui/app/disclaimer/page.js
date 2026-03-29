@@ -2,7 +2,7 @@ import Link from 'next/link'
 
 export const metadata = {
   title: 'Disclaimer – REDDYMATKA',
-  description: 'Read the REDDYMATKA  Disclaimer regarding accuracy of information, no professional advice, third-party links, and user responsibilities.',
+  description: 'Read the REDDYMATKA Disclaimer regarding accuracy of information, no professional advice, third-party links, and user responsibilities.',
 }
 
 export default function Disclaimer() {
@@ -23,7 +23,7 @@ export default function Disclaimer() {
           {/* Warning banner */}
           <div className="border-l-4 border-[#c8960c] bg-[#fff9ee] px-4 py-3">
             <p className="text-sm font-semibold leading-relaxed text-[#7a5500]">
-              REDDYMATKA  is for informational and entertainment purposes only. We do not promote or support gambling in any form. Gambling may be illegal in your country or region. Please check and follow your local laws before accessing this site. REDDYMATKA  is not responsible for any loss or damage arising from the use of this information.
+              REDDYMATKA is for informational and entertainment purposes only. We do not promote or support gambling in any form. Gambling may be illegal in your country or region. Please check and follow your local laws before accessing this site. REDDYMATKA is not responsible for any loss or damage arising from the use of this information.
             </p>
           </div>
 

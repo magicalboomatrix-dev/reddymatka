@@ -78,17 +78,11 @@ const YearlyChart = ({ data, year, selectedGameName = "" }) => {
 
       {/* GOLD HEADER SAME AS MONTHLY */}
       <div className="relative mt-2 mb-2 flex justify-center px-3">
-        <h2 className="relative w-full max-w-95 bg-[#e6cc9c] px-[clamp(52px,16vw,112px)] py-2 text-center text-xs font-bold text-black
+        <h2 className="relative w-full max-w-95 bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-[clamp(52px,16vw,112px)] py-2 text-center text-xs font-bold text-black sm:text-sm">
 
+          <span className="absolute top-0 -left-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-[-25deg] sm:-left-2.5"></span>
 
-
-
-
- sm:text-sm">
-
-          <span className="absolute top-0 -left-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[#e6cc9c] skew-x-[-25deg] sm:-left-2.5"></span>
-
-          <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[#e6cc9c] skew-x-25 sm:-right-2.5"></span>
+          <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-25 sm:-right-2.5"></span>
 
           <p className="relative z-10 whitespace-nowrap tracking-wide">
            {selectedGameName} YEARLY CHART {displayYear}
@@ -102,14 +96,10 @@ const YearlyChart = ({ data, year, selectedGameName = "" }) => {
 
           {/* HEADER */}
           <thead>
-            <tr className="bg-[#d4a15f]
-
- text-white font-bold">
+            <tr className="bg-[#c99a3a] text-white font-bold">
 
               {/* sticky first column */}
-              <th className="sticky left-0 z-20 bg-[#d4a15f]
-
- border border-[#d6b774] px-3 py-2">
+              <th className="sticky left-0 z-20 bg-[#c99a3a] border border-[#d6b774] px-3 py-2">
                 DAY
               </th>
 
@@ -135,22 +125,14 @@ const YearlyChart = ({ data, year, selectedGameName = "" }) => {
                 <tr key={day} className={rowBg}>
 
                   {/* sticky first column */}
-                  <td className="sticky left-0 bg-[#d4a15f]
-
- text-white font-semibold border border-[#d6b774] px-3 py-2">
+                  <td className="sticky left-0 bg-[#c99a3a] text-white font-semibold border border-[#d6b774] px-3 py-2">
                     {day}
                   </td>
 
                   {months.map((_, monthIndex) => (
                     <td
                       key={monthIndex}
-                      className="border border-[#d6b774] px-3 py-2 text-black
-
-
-
-
-
- w-20"
+                      className="border border-[#d6b774] px-3 py-2 text-black w-20"
                     >
                       {renderYearlyCell(
                         lookup[`${day}-${monthIndex + 1}`]

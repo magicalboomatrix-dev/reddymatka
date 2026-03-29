@@ -175,7 +175,7 @@ export default function MyBetsPage() {
 
       <div className="mx-auto w-full max-w-107.5">
         <section className="mb-1 overflow-hidden border border-[#1a1206] bg-[#050505] shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
-          <div className="bg-[#e6cc9c]  text-center text-[#111]">
+          <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)]  text-center text-[#111]">
             <h1 className="text-lg font-bold uppercase tracking-[0.14em]">
               My Bets
             </h1>
@@ -363,7 +363,7 @@ export default function MyBetsPage() {
                 key={bet.id}
                 className="overflow-hidden border border-[#d6b774] bg-white shadow-[0_12px_28px_rgba(79,52,10,0.08)]"
               >
-                <div className="flex items-center justify-between bg-[#e6cc9c] px-4 py-3.5 text-[#111]">
+                <div className="flex items-center justify-between bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-4 py-3.5 text-[#111]">
                   <div>
                     <div className="text-sm font-bold uppercase">
                       {bet.game_name}

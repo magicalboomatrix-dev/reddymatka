@@ -26,8 +26,7 @@ export default function CustomAds() {
         {ads.map((ad) => (
           <div
             key={ad.id}
-            className="rounded-2xl border-2 border-dashed border-red-500 bg-gradient-to-b from-[#e0bc87] to-[#faf3e6]
-p-2 text-center shadow-md"
+            className="rounded-2xl border-2 border-dashed border-red-500 bg-[linear-gradient(to_bottom,#b6842d_0%,#e6c86f_40%,#f4e7b3_70%,#fff6dc_100%)] p-2 text-center shadow-md"
           >
             {ad.title && (
               <p className="text-base font-black leading-snug text-[#1a0000] mb-2 line-through-none">

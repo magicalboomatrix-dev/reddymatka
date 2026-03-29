@@ -45,7 +45,7 @@ const ProfitLoss = () => {
         <DepositWithdrawBtns></DepositWithdrawBtns>
         
         <div className='mx-auto w-full max-w-[430px] '>
-          <div className="bg-[#e6cc9c] px-4 py-2.5 text-center text-[#111]"><h2 className="text-sm font-semibold uppercase tracking-[0.08em]"><b>Betting Profit and Loss</b></h2></div>
+          <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-4 py-2.5 text-center text-[#111]"><h2 className="text-sm font-semibold uppercase tracking-[0.08em]"><b>Betting Profit and Loss</b></h2></div>
           <section className='border border-t-0 border-[#d6b774] bg-white  shadow-[0_12px_28px_rgba(79,52,10,0.08)]'>
                     
                     <div className="grid grid-cols-2 gap-1 m-2">

@@ -171,9 +171,7 @@ export default function BankAccountsPage() {
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
                           <button type="button" className="bg-[#111] px-3 py-1 text-[11px] font-semibold text-white" onClick={() => startEdit(account)}>Edit</button>
-                          <button type="button" className="bg-[#e6cc9c]
-
- px-3 py-1 text-[11px] font-semibold text-white" onClick={() => setDefaultAccount(account)}>Set Default</button>
+                          <button type="button" className="bg-[#b88422] px-3 py-1 text-[11px] font-semibold text-white" onClick={() => setDefaultAccount(account)}>Set Default</button>
                           <button type="button" className="bg-[#b91c1c] px-3 py-1 text-[11px] font-semibold text-white" onClick={() => removeAccount(account)}>Delete</button>
                         </div>
                       </td>

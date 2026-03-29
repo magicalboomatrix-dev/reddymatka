@@ -69,8 +69,7 @@ const Header = () => {
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <button type="button" className="relative bg-[#e6cc9c]
-px-2.5 py-1.5" onClick={toggleNotifications} aria-label="Open notifications">
+            <button type="button" className="relative bg-[#b88422] px-2.5 py-1.5" onClick={toggleNotifications} aria-label="Open notifications">
               <i className="fa fa-bell text-[13px] text-black" aria-hidden="true"></i>
               {unreadCount > 0 && (
                 <span className="absolute -right-1 -top-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-[#b91c1c] px-1 text-[9px] font-bold text-white">
@@ -79,26 +78,16 @@ px-2.5 py-1.5" onClick={toggleNotifications} aria-label="Open notifications">
               )}
             </button>
            
-            <div className="flex min-w-20 flex-col bg-[#e6cc9c]
-
- px-1 py-1 text-left leading-none text-black">
+            <div className="flex min-w-20 flex-col bg-[#b88422] px-1 py-1 text-left leading-none text-black">
               <span className="text-[10px] font-bold">Bal: {wallet.balance.toFixed(2)}</span>
-              <small className="mt-1 text-[8px] font-semibold text-black">Exp: {wallet.exposure}</small>
+              <small className="mt-1 text-[8px] font-semibold text-[#00ff66]">Exp: {wallet.exposure}</small>
             </div>
-            <button type="button" className="bg-[#e6cc9c]
-
- px-2.5 py-1.5 text-black" onClick={toggleDrawer} aria-label="Open wallet drawer">
-             <i className="fa fa-user text-[13px] text-black" aria-hidden="true"></i>
+            <button type="button" className="bg-[#b88422] px-2.5 py-1.5" onClick={toggleDrawer} aria-label="Open wallet drawer">
+              <img src="/images/per-icon.png" className='h-4 w-4 object-contain' alt="Profile" />
             </button>
           </div>
         </div>
-      <div className="notice-marquee bg-[#e6cc9c] px-3 py-1.5 text-[12px] text-black
-
-
-
-
-
-">
+      <div className="notice-marquee bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-3 py-1.5 text-[12px] text-black">
         <span className="notice-marquee-label bg-black px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#ffd26a]">
           Notice
         </span>
@@ -127,13 +116,7 @@ px-2.5 py-1.5" onClick={toggleNotifications} aria-label="Open notifications">
         </aside>
 
         <div className={`fixed inset-0 z-40 bg-black/40 transition ${usopen ? 'visible opacity-100' : 'invisible opacity-0'}`} onClick={() => setusOpen(false)} />
-        <div className={`absolute right-0 top-10 z-50  w-55 bg-[rgba(255,255,255,0.95)] p-3 text-black
-
-
-
-
-
- shadow-[0_16px_32px_rgba(0,0,0,0.25)] transition ${usopen ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-2 opacity-0'}`}>
+        <div className={`absolute right-0 top-10 z-50  w-55 bg-[rgba(255,255,255,0.95)] p-3 text-black shadow-[0_16px_32px_rgba(0,0,0,0.25)] transition ${usopen ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-2 opacity-0'}`}>
           <div className="border border-[#b88831] bg-[#f1f1f1] px-3 py-2">
             <div className="mb-3 flex items-start justify-between gap-3 text-[13px] leading-4">
               <span>Wallet Amount <br/><small>(Inclusive bonus)</small></span>
@@ -159,13 +142,7 @@ px-2.5 py-1.5" onClick={toggleNotifications} aria-label="Open notifications">
         {notificationsOpen && (
           <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setNotificationsOpen(false)} />
         )}
-        <div className={`absolute right-12 top-10 z-50 w-72 border border-[#d6b774] bg-white p-2 text-black
-
-
-
-
-
- shadow-[0_16px_32px_rgba(0,0,0,0.25)] transition ${notificationsOpen ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-2 opacity-0'}`}>
+        <div className={`absolute right-12 top-10 z-50 w-72 border border-[#d6b774] bg-white p-2 text-black shadow-[0_16px_32px_rgba(0,0,0,0.25)] transition ${notificationsOpen ? 'visible translate-y-0 opacity-100' : 'invisible -translate-y-2 opacity-0'}`}>
           <div className="border-b border-[#ead8ab] px-2 py-2 text-xs font-black uppercase tracking-[0.12em] text-[#6d4a08]">Notifications</div>
           <div className="max-h-64 overflow-y-auto">
             {notifications.slice(0, 8).map((item) => (

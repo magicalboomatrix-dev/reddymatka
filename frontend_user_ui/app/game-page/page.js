@@ -307,7 +307,7 @@ function GamePageInner() {
     <div className="relative mx-auto w-full max-w-107.5 bg-[#f6f7fa] pb-28">
       <Header />
       <section className="">
-        <div className="bg-[#e6cc9c] px-4 py-3 text-center shadow-[0_12px_24px_rgba(184,132,34,0.22)]">
+        <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-4 py-3 text-center shadow-[0_12px_24px_rgba(184,132,34,0.22)]">
           <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#1f1500]"><b>{decodeURIComponent(gameName)}</b></h2>
         </div>
         {error && <div className="mt-2 text-center text-sm font-semibold text-[#b91c1c]">{error}</div>}
@@ -399,13 +399,7 @@ function GamePageInner() {
                 
                 <div className="mb-3 mt-3 flex items-center gap-2">
                   <input type="checkbox" id="cj" checked={crossIncludeJodi} onChange={() => setCrossIncludeJodi(!crossIncludeJodi)} />
-                  <label htmlFor="cj" className="font-bold text-black
-
-
-
-
-
-">with jodi</label>
+                  <label htmlFor="cj" className="font-bold text-black">with jodi</label>
                 </div>
 
                 <button type="button" onClick={generateCrossCombos} className={primaryButtonClass} disabled={bettingClosed}>Generate Crossing</button>
@@ -437,13 +431,7 @@ function GamePageInner() {
           <div className="w-full max-w-[320px] bg-white p-6 shadow-[0_20px_40px_rgba(0,0,0,0.2)]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 text-center">
                <span className="text-[14px] uppercase tracking-[0.12em] text-[#666]">Set Price for</span>
-               <h2 className="mt-1 text-[28px] font-bold text-black
-
-
-
-
-
-">Number {activeSlot}</h2>
+               <h2 className="mt-1 text-[28px] font-bold text-black">Number {activeSlot}</h2>
             </div>
             <form onSubmit={saveAmount}>
               <input autoFocus type="text" inputMode="numeric" value={amount} onChange={(e) => handleNumericInput(e.target.value, setAmount)} placeholder="0" className={inputClass} />
@@ -463,13 +451,7 @@ function GamePageInner() {
           <div className="w-full max-w-[320px] bg-white p-6 shadow-[0_20px_40px_rgba(0,0,0,0.2)]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 text-center">
                <span className="text-[14px] uppercase tracking-[0.12em] text-[#666]">{harufType} Side</span>
-               <h2 className="mt-1 text-[28px] font-bold text-black
-
-
-
-
-
-">Digit {harufSlot}</h2>
+               <h2 className="mt-1 text-[28px] font-bold text-black">Digit {harufSlot}</h2>
             </div>
             <form onSubmit={saveHaruf}>
               <input autoFocus type="text" inputMode="numeric" value={amount} onChange={(e) => handleNumericInput(e.target.value, setAmount)} placeholder="0" className={inputClass} />
