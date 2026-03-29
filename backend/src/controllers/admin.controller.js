@@ -101,8 +101,13 @@ exports.updateSettings = async (req, res, next) => {
       return res.status(400).json({ error: 'Settings array required.' });
     }
 
-    for (const { key, value } of settings) {
-      await pool.query('UPDATE settings SET setting_value = ? WHERE setting_key = ?', [value, key]);
+    for (const { key, value, description } of settings) {
+      await pool.query(
+        `INSERT INTO settings (setting_key, setting_value, description)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)`,
+        [key, value, description || null]
+      );
     }
 
     res.json({ message: 'Settings updated.' });
