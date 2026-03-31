@@ -1,21 +1,8 @@
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
-const fs = require('fs');
-const path = require('path');
-const { ensureModeratorWalletRow, recordModeratorWalletTransaction } = require('../utils/wallet-ledger');
-
-const uploadDir = path.join(__dirname, '..', '..', 'uploads');
 
 function generateReferralCode() {
   return 'MOD' + Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-function cleanupUploadedFile(fileName) {
-  if (!fileName) {
-    return;
-  }
-
-  fs.promises.unlink(path.join(uploadDir, fileName)).catch(() => {});
 }
 
 function normalizeScannerEnabled(value) {
@@ -80,10 +67,6 @@ function validateScannerLabel(scannerLabel) {
   return { isValid: true, message: '' };
 }
 
-function shouldRequireQr({ nextScannerEnabled, existingQrCodeImage, nextQrCodeImage }) {
-  return Boolean(nextScannerEnabled) && !existingQrCodeImage && !nextQrCodeImage;
-}
-
 function normalizeAuditValue(fieldName, value) {
   if (value === undefined || value === null || value === '') {
     return null;
@@ -97,7 +80,7 @@ function normalizeAuditValue(fieldName, value) {
 }
 
 function buildScannerAuditEntries({ moderatorId, actor, previousScanner, nextScanner }) {
-  const fields = ['scanner_label', 'upi_id', 'scanner_enabled', 'qr_code_image'];
+  const fields = ['scanner_label', 'upi_id', 'scanner_enabled'];
 
   return fields.reduce((entries, fieldName) => {
     const previousValue = normalizeAuditValue(fieldName, previousScanner[fieldName]);
@@ -155,7 +138,6 @@ exports.createModerator = async (req, res, next) => {
     );
 
     await conn.query('INSERT INTO wallets (user_id, balance, bonus_balance) VALUES (?, 0.00, 0.00)', [result.insertId]);
-    await conn.query('INSERT INTO moderator_wallet (moderator_id, balance) VALUES (?, 0.00)', [result.insertId]);
 
     await conn.commit();
 
@@ -174,13 +156,11 @@ exports.createModerator = async (req, res, next) => {
 exports.listModerators = async (req, res, next) => {
   try {
     const [moderators] = await pool.query(`
-          SELECT u.id, u.name, u.phone, u.referral_code, u.upi_id, u.qr_code_image,
+          SELECT u.id, u.name, u.phone, u.referral_code, u.upi_id,
              u.scanner_label, u.scanner_enabled, u.is_blocked, u.created_at,
-            COALESCE(mw.balance, 0) AS float_balance,
              (SELECT COUNT(*) FROM users WHERE moderator_id = u.id) as user_count
           FROM users u
-          LEFT JOIN moderator_wallet mw ON mw.moderator_id = u.id
-          WHERE u.role = 'moderator'
+          WHERE u.role = 'moderator' AND u.is_deleted = 0
       ORDER BY u.created_at DESC
     `);
     res.json({ moderators });
@@ -195,7 +175,7 @@ exports.updateModerator = async (req, res, next) => {
     const { name, phone, is_blocked, password, upi_id, scanner_label, scanner_enabled } = req.body;
 
     const [moderators] = await pool.query(
-      `SELECT id, qr_code_image, scanner_enabled FROM users WHERE id = ? AND role = 'moderator' LIMIT 1`,
+      `SELECT id, scanner_enabled FROM users WHERE id = ? AND role = 'moderator' LIMIT 1`,
       [id]
     );
 
@@ -219,12 +199,17 @@ exports.updateModerator = async (req, res, next) => {
       }
     }
 
+    // Require UPI ID when enabling scanner
     const nextScannerEnabled = scanner_enabled !== undefined
       ? normalizeScannerEnabled(scanner_enabled)
       : currentModerator.scanner_enabled;
 
-    if (shouldRequireQr({ nextScannerEnabled, existingQrCodeImage: currentModerator.qr_code_image, nextQrCodeImage: null })) {
-      return res.status(400).json({ error: 'QR code image is required when scanner is enabled.' });
+    if (nextScannerEnabled && !upi_id) {
+      // Check if existing UPI is set
+      const [existing] = await pool.query('SELECT upi_id FROM users WHERE id = ?', [id]);
+      if (!existing[0]?.upi_id) {
+        return res.status(400).json({ error: 'UPI ID is required when scanner is enabled.' });
+      }
     }
 
     const fields = [];
@@ -257,7 +242,6 @@ exports.updateModerator = async (req, res, next) => {
         scanner_label: scanner_label !== undefined ? (scanner_label ? String(scanner_label).trim() : null) : currentModerator.scanner_label,
         upi_id: upi_id !== undefined ? (upi_id ? String(upi_id).trim() : null) : currentModerator.upi_id,
         scanner_enabled: scanner_enabled !== undefined ? normalizeScannerEnabled(scanner_enabled) : currentModerator.scanner_enabled,
-        qr_code_image: currentModerator.qr_code_image,
       },
     });
 
@@ -283,17 +267,15 @@ exports.updateScanner = async (req, res, next) => {
     const moderatorId = parseInt(id, 10);
 
     if (req.user.role === 'moderator' && req.user.id !== moderatorId) {
-      cleanupUploadedFile(req.file?.filename);
       return res.status(403).json({ error: 'You can update only your own scanner.' });
     }
 
     const [moderators] = await pool.query(
-      `SELECT id, qr_code_image, scanner_enabled FROM users WHERE id = ? AND role = 'moderator' LIMIT 1`,
+      `SELECT id, scanner_enabled, upi_id, scanner_label FROM users WHERE id = ? AND role = 'moderator' LIMIT 1`,
       [moderatorId]
     );
 
     if (moderators.length === 0) {
-      cleanupUploadedFile(req.file?.filename);
       return res.status(404).json({ error: 'Moderator not found.' });
     }
 
@@ -304,7 +286,6 @@ exports.updateScanner = async (req, res, next) => {
     if (upi_id !== undefined) {
       const validation = validateUpiId(upi_id);
       if (!validation.isValid) {
-        cleanupUploadedFile(req.file?.filename);
         return res.status(400).json({ error: validation.message });
       }
     }
@@ -312,19 +293,18 @@ exports.updateScanner = async (req, res, next) => {
     if (scanner_label !== undefined) {
       const validation = validateScannerLabel(scanner_label);
       if (!validation.isValid) {
-        cleanupUploadedFile(req.file?.filename);
         return res.status(400).json({ error: validation.message });
       }
     }
 
+    // Require UPI ID when enabling scanner
     const nextScannerEnabled = scanner_enabled !== undefined
       ? normalizeScannerEnabled(scanner_enabled)
       : moderators[0].scanner_enabled;
-    const nextQrCodeImage = req.file?.filename ? `scanners/${req.file.filename}` : null;
+    const nextUpiId = upi_id !== undefined ? (upi_id ? String(upi_id).trim() : null) : moderators[0].upi_id;
 
-    if (shouldRequireQr({ nextScannerEnabled, existingQrCodeImage: moderators[0].qr_code_image, nextQrCodeImage })) {
-      cleanupUploadedFile(req.file?.filename);
-      return res.status(400).json({ error: 'QR code image is required when scanner is enabled.' });
+    if (nextScannerEnabled && !nextUpiId) {
+      return res.status(400).json({ error: 'UPI ID is required when scanner is enabled.' });
     }
 
     if (upi_id !== undefined) {
@@ -342,13 +322,7 @@ exports.updateScanner = async (req, res, next) => {
       values.push(normalizeScannerEnabled(scanner_enabled));
     }
 
-    if (req.file?.filename) {
-      fields.push('qr_code_image = ?');
-      values.push(`scanners/${req.file.filename}`);
-    }
-
     if (fields.length === 0) {
-      cleanupUploadedFile(req.file?.filename);
       return res.status(400).json({ error: 'No scanner fields to update.' });
     }
 
@@ -361,17 +335,12 @@ exports.updateScanner = async (req, res, next) => {
       previousScanner: moderators[0],
       nextScanner: {
         scanner_label: scanner_label !== undefined ? (scanner_label ? String(scanner_label).trim() : null) : moderators[0].scanner_label,
-        upi_id: upi_id !== undefined ? (upi_id ? String(upi_id).trim() : null) : moderators[0].upi_id,
-        scanner_enabled: scanner_enabled !== undefined ? normalizeScannerEnabled(scanner_enabled) : moderators[0].scanner_enabled,
-        qr_code_image: nextQrCodeImage || moderators[0].qr_code_image,
+        upi_id: nextUpiId,
+        scanner_enabled: nextScannerEnabled,
       },
     });
 
     await insertScannerAuditEntries(scannerAuditEntries);
-
-    if (req.file?.filename && moderators[0].qr_code_image && moderators[0].qr_code_image !== `scanners/${req.file.filename}`) {
-      cleanupUploadedFile(moderators[0].qr_code_image);
-    }
 
     if (req.user.role === 'admin' && scannerAuditEntries.length > 0) {
       const actorName = req.user.name || 'Admin';
@@ -383,7 +352,6 @@ exports.updateScanner = async (req, res, next) => {
 
     res.json({ message: 'Moderator scanner updated.' });
   } catch (error) {
-    cleanupUploadedFile(req.file?.filename);
     next(error);
   }
 };
@@ -395,10 +363,8 @@ exports.getOwnScanner = async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT u.id AS moderator_id, u.upi_id, u.qr_code_image, u.scanner_label, u.scanner_enabled,
-              COALESCE(mw.balance, 0) AS float_balance
+      `SELECT u.id AS moderator_id, u.upi_id, u.scanner_label, u.scanner_enabled
        FROM users u
-       LEFT JOIN moderator_wallet mw ON mw.moderator_id = u.id
        WHERE u.id = ? AND u.role = 'moderator' LIMIT 1`,
       [req.user.id]
     );
@@ -418,51 +384,16 @@ exports.updateOwnScanner = async (req, res, next) => {
   return exports.updateScanner(req, res, next);
 };
 
-exports.adjustModeratorFloat = async (req, res, next) => {
-  const conn = await pool.getConnection();
-  try {
-    const { id } = req.params;
-    const { amount, note } = req.body;
-    const parsedAmount = parseFloat(amount);
-
-    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
-      return res.status(400).json({ error: 'A non-zero amount is required.' });
-    }
-
-    await conn.beginTransaction();
-
-    const [moderators] = await conn.query('SELECT id FROM users WHERE id = ? AND role = ? LIMIT 1', [id, 'moderator']);
-    if (moderators.length === 0) {
-      await conn.rollback();
-      return res.status(404).json({ error: 'Moderator not found.' });
-    }
-
-    const newBalance = await recordModeratorWalletTransaction(conn, {
-      moderatorId: id,
-      type: 'adjustment',
-      amount: parsedAmount,
-      referenceId: `admin_adjust_${req.user.id}_${Date.now()}`,
-      remark: note ? String(note).trim().slice(0, 255) : (parsedAmount > 0 ? 'Admin float top-up' : 'Admin float deduction'),
-      createdBy: req.user.id,
-    });
-
-    await conn.commit();
-    res.json({ message: 'Moderator float updated.', balance: newBalance });
-  } catch (error) {
-    await conn.rollback();
-    next(error);
-  } finally {
-    conn.release();
-  }
-};
-
 exports.deleteModerator = async (req, res, next) => {
   try {
     const { id } = req.params;
-    // Unassign users first
+    // Soft delete: mark as deleted, unassign users, disable scanner
     await pool.query('UPDATE users SET moderator_id = NULL WHERE moderator_id = ?', [id]);
-    await pool.query("DELETE FROM users WHERE id = ? AND role = 'moderator'", [id]);
-    res.json({ message: 'Moderator deleted.' });
+    await pool.query(
+      "UPDATE users SET is_deleted = 1, is_blocked = 1, scanner_enabled = 0 WHERE id = ? AND role = 'moderator'",
+      [id]
+    );
+    res.json({ message: 'Moderator archived.' });
   } catch (error) {
     next(error);
   }

@@ -587,20 +587,7 @@ const HomePage = () => {
               Check <span className="arw">→</span>
             </button>
           </div>
-          {(() => {
-            const allNames = (games ?? []).map((g) => g.name);
-            const half = Math.ceil(allNames.length / 2);
-            const firstHalf = allNames.slice(0, half);
-            const secondHalf = allNames.slice(half);
-            return secondHalf.length > 0 ? (
-              <div>
-                <MonthlyChart data={monthlyData} gameNames={firstHalf} />
-                <MonthlyChart data={monthlyData} gameNames={secondHalf} />
-              </div>
-            ) : (
-              <MonthlyChart data={monthlyData} gameNames={firstHalf} />
-            );
-          })()}
+          <MonthlyChart data={monthlyData} gameNames={(games ?? []).map((game) => game.name)} />
         </div>
       </section>
     </div>

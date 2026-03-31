@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import api, { buildUploadUrl } from '../utils/api';
+import api from '../utils/api';
 import { useToast, ToastContainer, useConfirm, ConfirmModal } from '../components/ui';
 
 function formatCurrency(value) {
@@ -57,7 +57,7 @@ export default function Moderators() {
   };
 
   const handleDelete = async (id) => {
-    const ok = await confirm('Delete this moderator? Their users will be unassigned.', 'Delete Moderator', 'danger');
+    const ok = await confirm('Archive this moderator? Their users will be unassigned and the scanner disabled. The audit trail will be preserved.', 'Archive Moderator', 'danger');
     if (!ok) return;
     try {
       await api.delete(`/moderators/${id}`);
@@ -81,18 +81,6 @@ export default function Moderators() {
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-gray-800">Moderators ({moderators.length})</h3>
         <div className="flex gap-2">
-          <Link
-            to="/moderator-scanners"
-            className="px-4 py-2 bg-white border hover:bg-gray-50 text-sm font-medium text-gray-700"
-          >
-            Scanner View
-          </Link>
-          <Link
-            to="/moderator-floats"
-            className="px-4 py-2 bg-white border hover:bg-gray-50 text-sm font-medium text-gray-700"
-          >
-            Float Table
-          </Link>
           <button
             onClick={() => setShowForm(!showForm)}
             className="px-4 py-2 bg-primary-600 text-white hover:bg-primary-700 text-sm font-medium"
@@ -177,7 +165,7 @@ export default function Moderators() {
                   </button>
                   <button onClick={() => handleDelete(m.id)}
                     className="px-2 py-1 text-xs bg-red-100 text-red-700 hover:bg-red-200">
-                    Delete
+                    Archive
                   </button>
                 </td>
               </tr>
@@ -197,7 +185,6 @@ export default function Moderators() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Moderator</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">UPI ID</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">QR</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Total Deposits</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Total Amount</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Last Deposit</th>
@@ -209,13 +196,6 @@ export default function Moderators() {
                 <tr key={stat.moderator_id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{stat.moderator_name}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{stat.upi_id || '-'}</td>
-                  <td className="px-4 py-3">
-                    {stat.qr_code_image ? (
-                      <img src={buildUploadUrl(stat.qr_code_image)} alt={`${stat.moderator_name} QR`} className="h-16 w-16 border object-contain bg-white p-1" />
-                    ) : (
-                      <span className="text-xs text-gray-400">No QR</span>
-                    )}
-                  </td>
                   <td className="px-4 py-3 text-right">{Number(stat.total_deposits || 0).toLocaleString('en-IN')}</td>
                   <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(stat.total_amount)}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{stat.last_deposit_date ? new Date(stat.last_deposit_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
@@ -230,7 +210,7 @@ export default function Moderators() {
                 </tr>
               ))}
               {stats.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">No moderator analytics yet</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No moderator analytics yet</td></tr>
               )}
             </tbody>
           </table>

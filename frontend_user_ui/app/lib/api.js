@@ -99,11 +99,17 @@ export const betAPI = {
   recentWinners: (params = {}) => request(`/bets/recent-winners?${new URLSearchParams(params)}`),
 };
 
-// Deposits
+// Deposits (read-only history)
 export const depositAPI = {
-  scanner: () => request('/deposit/scanner'),
-  request: (formData) => request('/deposits/request', { method: 'POST', body: formData }),
   history: (params) => request(`/deposits/history?${new URLSearchParams(params)}`),
+};
+
+// Auto Deposits (UPI auto-detection)
+export const autoDepositAPI = {
+  createOrder: (amount) => request('/auto-deposit/order', { method: 'POST', body: JSON.stringify({ amount }) }),
+  getOrderStatus: (id) => request(`/auto-deposit/order/status/${id}`),
+  getMyOrders: (params) => request(`/auto-deposit/orders?${new URLSearchParams(params)}`),
+  cancelOrder: (id) => request(`/auto-deposit/order/${id}/cancel`, { method: 'POST' }),
 };
 
 // Withdrawals

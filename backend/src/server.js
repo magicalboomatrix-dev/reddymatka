@@ -22,9 +22,13 @@ const moderatorSelfRoutes = require('./routes/moderator-self.routes');
 const adminRoutes = require('./routes/admin.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const customAdsRoutes = require('./routes/home-banner.routes');
+const telegramRoutes = require('./routes/telegram.routes');
+const autoDepositRoutes = require('./routes/auto-deposit.routes');
 
 const { errorHandler } = require('./middleware/error.middleware');
 const { startAutoSettle } = require('./utils/auto-settle');
+const { expirePendingOrders } = require('./services/auto-deposit-matcher');
+const logger = require('./utils/logger');
 
 const app = express();
 
@@ -59,6 +63,7 @@ const allowedOrigins = [process.env.FRONTEND_URL, process.env.ADMIN_URL]
   .flatMap((origin) => getOriginVariants(origin));
 
 // Security
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors({
   origin(origin, callback) {
@@ -80,13 +85,25 @@ app.use(cors({
 }));
 
 // Rate limiting
-const limiter = rateLimit({
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
 });
-app.use('/api/auth', limiter);
+app.use('/api/auth', authLimiter);
+
+// Stricter rate limits for financial endpoints (per IP)
+const financialLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please try again later.' },
+});
+app.use('/api/withdraw', financialLimiter);
+app.use('/api/auto-deposit', financialLimiter);
+app.use('/api/bets', financialLimiter);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -107,7 +124,6 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/bets', betRoutes);
 app.use('/api/deposits', depositRoutes);
-app.use('/api/deposit', depositRoutes);
 app.use('/api/withdraw', withdrawRoutes);
 app.use('/api/bonus', bonusRoutes);
 app.use('/api/results', resultRoutes);
@@ -117,6 +133,8 @@ app.use('/api/moderator', moderatorSelfRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/custom-ads', customAdsRoutes);
+app.use('/api/telegram', telegramRoutes);
+app.use('/api/auto-deposit', autoDepositRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -128,8 +146,20 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT;
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info('server', `Server running on port ${PORT}`);
   startAutoSettle();
+
+  // Expire stale deposit orders every 60 seconds
+  setInterval(async () => {
+    try {
+      const expired = await expirePendingOrders();
+      if (expired > 0) {
+        logger.info('auto-deposit', `Expired ${expired} stale deposit orders`);
+      }
+    } catch (err) {
+      logger.error('auto-deposit', 'Order expiry error', err);
+    }
+  }, 60_000);
 });
 
 module.exports = app;

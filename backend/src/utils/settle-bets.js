@@ -103,6 +103,9 @@ async function settleBetsForGame(conn, gameId, resultStr, resultId) {
       }
     }
 
+    // Round to 2 decimal places to avoid floating point drift
+    totalWin = Math.round(totalWin * 100) / 100;
+
     const status = totalWin > 0 ? 'win' : 'loss';
     await conn.query(
       'UPDATE bets SET status = ?, win_amount = ?, game_result_id = ?, settled_at = NOW() WHERE id = ?',

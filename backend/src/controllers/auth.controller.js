@@ -7,6 +7,8 @@ const { IST_NOW_SQL } = require('../utils/sql-time');
 
 const MAX_MPIN_ATTEMPTS = 5;
 const MPIN_BLOCK_MINUTES = 30;
+const MAX_ADMIN_LOGIN_ATTEMPTS = 5;
+const ADMIN_LOGIN_BLOCK_MINUTES = 30;
 
 function generateReferralCode() {
   return 'REDDYMATKA' + Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -433,7 +435,7 @@ exports.adminLogin = async (req, res, next) => {
     }
 
     const [users] = await pool.query(
-      'SELECT id, name, phone, password, role FROM users WHERE phone IN (?) AND role IN (?, ?) LIMIT 1',
+      'SELECT id, name, phone, password, role, failed_login_attempts, login_blocked_until FROM users WHERE phone IN (?) AND role IN (?, ?) LIMIT 1',
       [phoneCandidates, 'admin', 'moderator']
     );
 
@@ -441,16 +443,38 @@ exports.adminLogin = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
-    const isValid = await bcrypt.compare(password, users[0].password);
+    const user = users[0];
+
+    // Check if account is temporarily locked
+    if (user.login_blocked_until && new Date(user.login_blocked_until) > new Date()) {
+      const remainingMin = Math.ceil((new Date(user.login_blocked_until) - new Date()) / 60000);
+      return res.status(429).json({ error: `Account temporarily locked. Try again in ${remainingMin} minute(s).` });
+    }
+
+    const isValid = await bcrypt.compare(password, user.password);
     if (!isValid) {
+      const attempts = (user.failed_login_attempts || 0) + 1;
+      if (attempts >= MAX_ADMIN_LOGIN_ATTEMPTS) {
+        await pool.query(
+          'UPDATE users SET failed_login_attempts = ?, login_blocked_until = DATE_ADD(NOW(), INTERVAL ? MINUTE) WHERE id = ?',
+          [attempts, ADMIN_LOGIN_BLOCK_MINUTES, user.id]
+        );
+        return res.status(429).json({ error: `Too many failed attempts. Account locked for ${ADMIN_LOGIN_BLOCK_MINUTES} minutes.` });
+      }
+      await pool.query('UPDATE users SET failed_login_attempts = ? WHERE id = ?', [attempts, user.id]);
       return res.status(401).json({ error: 'Invalid credentials.' });
     }
 
-    const token = jwt.sign({ id: users[0].id, role: users[0].role }, process.env.JWT_SECRET, {
+    // Reset failed attempts on successful login
+    if (user.failed_login_attempts > 0 || user.login_blocked_until) {
+      await pool.query('UPDATE users SET failed_login_attempts = 0, login_blocked_until = NULL WHERE id = ?', [user.id]);
+    }
+
+    const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
 
-    const { password: _, ...userWithoutPassword } = users[0];
+    const { password: _, failed_login_attempts: _a, login_blocked_until: _b, ...userWithoutPassword } = user;
     res.json({ message: 'Login successful.', token, user: userWithoutPassword });
   } catch (error) {
     next(error);

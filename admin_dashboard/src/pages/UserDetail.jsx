@@ -1,18 +1,9 @@
 ﻿import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import api, { buildUploadUrl } from '../utils/api';
+import api from '../utils/api';
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
-}
-
-function formatApprovedBy(item) {
-  if (!item?.approved_by_name) {
-    return '-';
-  }
-
-  const role = item.approved_by_role ? `${item.approved_by_role.charAt(0).toUpperCase() + item.approved_by_role.slice(1)} ` : '';
-  return `${role}${item.approved_by_name}`;
 }
 
 export default function UserDetail() {
@@ -109,9 +100,8 @@ export default function UserDetail() {
               <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">UTR</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Payer</th>
               <th className="text-center px-4 py-3 font-medium text-gray-600">Status</th>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Review</th>
-              <th className="text-center px-4 py-3 font-medium text-gray-600">Receipt</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -120,21 +110,15 @@ export default function UserDetail() {
                 <td className="px-4 py-3 text-xs text-gray-600">{new Date(deposit.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
                 <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(deposit.amount)}</td>
                 <td className="px-4 py-3 font-mono text-xs">{deposit.utr_number}</td>
+                <td className="px-4 py-3 text-xs text-gray-600">{deposit.payer_name || '-'}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className={`px-2 py-1 text-xs font-medium ${deposit.status === 'approved' ? 'bg-green-100 text-green-700' : deposit.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
                     {deposit.status}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-xs text-gray-600">
-                  <div>{formatApprovedBy(deposit)}</div>
-                  <div className="text-gray-500">{deposit.reviewed_at ? new Date(deposit.reviewed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</div>
-                </td>
-                <td className="px-4 py-3 text-center text-xs">
-                  {deposit.receipt_image ? <a href={buildUploadUrl(deposit.receipt_image)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">View</a> : '-'}
-                </td>
               </tr>
             ))}
-            {deposits.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-gray-400">No deposits</td></tr>}
+            {deposits.length === 0 && <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">No deposits</td></tr>}
           </tbody>
         </table>
       </div>

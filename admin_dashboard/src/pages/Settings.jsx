@@ -12,6 +12,7 @@ const EXPECTED_SETTINGS = {
   ],
   'Deposit & Withdrawal': [
     { key: 'min_deposit', label: 'Minimum Deposit', description: 'Minimum deposit amount', default: '100' },
+    { key: 'max_deposit', label: 'Maximum Deposit', description: 'Maximum deposit amount', default: '50000' },
     { key: 'min_withdraw', label: 'Minimum Withdrawal', description: 'Minimum withdrawal amount', default: '200' },
     { key: 'max_withdraw_time_minutes', label: 'Max Withdraw Time (Minutes)', description: 'Maximum withdrawal processing time', default: '45' },
   ],

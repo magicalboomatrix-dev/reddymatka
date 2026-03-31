@@ -1,6 +1,7 @@
 const pool = require('../config/database');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const { canPlaceBet } = require('../utils/game-time');
+const { clampPagination, escapeLike } = require('../utils/pagination');
 
 // Generate crossing combinations: digits A,B → "AB" and "BA" (if different)
 function generateCrossingNumbers(digit1, digit2) {
@@ -175,8 +176,8 @@ exports.placeBet = async (req, res, next) => {
 
 exports.getUserBets = async (req, res, next) => {
   try {
-    const { game_id, status, search, from_date, to_date, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { game_id, status, search, from_date, to_date } = req.query;
+    const { page, limit, offset } = clampPagination(req.query);
 
     let query = `
       SELECT b.*, g.name as game_name
@@ -203,6 +204,7 @@ exports.getUserBets = async (req, res, next) => {
       params.push(to_date);
     }
     if (search) {
+      const escaped = escapeLike(search);
       query += `
         AND (
           g.name LIKE ?
@@ -215,30 +217,41 @@ exports.getUserBets = async (req, res, next) => {
           )
         )
       `;
-      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+      params.push(`%${escaped}%`, `%${escaped}%`, `%${escaped}%`);
     }
 
     const countQuery = `SELECT COUNT(*) as total FROM (${query}) as countTable`;
     const [countResult] = await pool.query(countQuery, params);
 
     query += ' ORDER BY b.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    params.push(limit, offset);
 
     const [bets] = await pool.query(query, params);
 
-    // Get bet numbers for each bet
-    for (const bet of bets) {
-      const [nums] = await pool.query('SELECT number, amount FROM bet_numbers WHERE bet_id = ?', [bet.id]);
-      bet.numbers = nums;
+    // Batch-load bet numbers (avoids N+1 query)
+    if (bets.length > 0) {
+      const betIds = bets.map(b => b.id);
+      const [allNums] = await pool.query(
+        'SELECT bet_id, number, amount FROM bet_numbers WHERE bet_id IN (?)',
+        [betIds]
+      );
+      const numsByBet = {};
+      for (const n of allNums) {
+        if (!numsByBet[n.bet_id]) numsByBet[n.bet_id] = [];
+        numsByBet[n.bet_id].push({ number: n.number, amount: n.amount });
+      }
+      for (const bet of bets) {
+        bet.numbers = numsByBet[bet.id] || [];
+      }
     }
 
     res.json({
       bets,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+        totalPages: Math.ceil(countResult[0].total / limit),
       }
     });
   } catch (error) {

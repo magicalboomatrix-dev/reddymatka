@@ -40,7 +40,7 @@ async function recordWalletTransaction(conn, {
   const wallet = await ensureWalletRow(conn, userId);
   const currentBalance = parseFloat(wallet.balance || 0);
   const parsedAmount = parseFloat(amount || 0);
-  const nextBalance = currentBalance + parsedAmount;
+  const nextBalance = Math.round((currentBalance + parsedAmount) * 100) / 100;
 
   if (nextBalance < 0) {
     throw Object.assign(new Error('Insufficient wallet balance.'), { statusCode: 400 });
@@ -57,55 +57,7 @@ async function recordWalletTransaction(conn, {
   return nextBalance;
 }
 
-async function ensureModeratorWalletRow(conn, moderatorId) {
-  await conn.query(
-    'INSERT IGNORE INTO moderator_wallet (moderator_id, balance) VALUES (?, 0.00)',
-    [moderatorId]
-  );
-
-  const [wallets] = await conn.query(
-    'SELECT balance FROM moderator_wallet WHERE moderator_id = ? FOR UPDATE',
-    [moderatorId]
-  );
-
-  if (wallets.length === 0) {
-    throw Object.assign(new Error('Moderator wallet not found.'), { statusCode: 404 });
-  }
-
-  return wallets[0];
-}
-
-async function recordModeratorWalletTransaction(conn, {
-  moderatorId,
-  type,
-  amount,
-  referenceId,
-  remark = null,
-  createdBy = null,
-}) {
-  const wallet = await ensureModeratorWalletRow(conn, moderatorId);
-  const currentBalance = parseFloat(wallet.balance || 0);
-  const parsedAmount = parseFloat(amount || 0);
-  const nextBalance = currentBalance + parsedAmount;
-
-  if (nextBalance < 0) {
-    throw Object.assign(new Error('Moderator float balance is insufficient for this approval.'), { statusCode: 400 });
-  }
-
-  await conn.query('UPDATE moderator_wallet SET balance = ? WHERE moderator_id = ?', [nextBalance, moderatorId]);
-  await conn.query(
-    `INSERT INTO moderator_wallet_transactions
-      (moderator_id, type, amount, balance_after, reference_id, remark, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [moderatorId, type, parsedAmount, nextBalance, referenceId || null, remark, createdBy]
-  );
-
-  return nextBalance;
-}
-
 module.exports = {
   ensureWalletRow,
   recordWalletTransaction,
-  ensureModeratorWalletRow,
-  recordModeratorWalletTransaction,
 };

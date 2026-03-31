@@ -6,6 +6,15 @@ exports.getDashboard = async (req, res, next) => {
     const isModerator = req.user.role === 'moderator';
     const userScopeClause = isModerator ? ' AND moderator_id = ?' : '';
     const userScopeParams = isModerator ? [req.user.id] : [];
+
+    // Block soft-deleted moderators from accessing data
+    if (isModerator) {
+      const [mod] = await pool.query('SELECT is_deleted FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+      if (!mod.length || mod[0].is_deleted) {
+        return res.status(403).json({ error: 'Account deactivated.' });
+      }
+    }
+
     const currentDayFilter = (column) => `${column} >= ${IST_DATE_SQL} AND ${column} < ${IST_DATE_SQL} + INTERVAL 1 DAY`;
 
     // Total users
@@ -19,7 +28,7 @@ exports.getDashboard = async (req, res, next) => {
       `SELECT COUNT(*) as count, COALESCE(SUM(d.amount), 0) as total
        FROM deposits d
        JOIN users u ON d.user_id = u.id
-       WHERE ${currentDayFilter('d.created_at')} AND d.status = 'approved'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
+       WHERE ${currentDayFilter('d.created_at')} AND d.status = 'completed'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
       userScopeParams
     );
 
@@ -41,14 +50,8 @@ exports.getDashboard = async (req, res, next) => {
       userScopeParams
     );
 
-    // Pending deposits
-    const [pendingDeposits] = await pool.query(
-      `SELECT COUNT(*) as count
-       FROM deposits d
-       JOIN users u ON d.user_id = u.id
-       WHERE d.status = 'pending'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
-      userScopeParams
-    );
+    // Pending deposits (none — all auto-verified)
+    const pendingDeposits = [{ count: 0 }];
 
     // Pending withdrawals
     const [pendingWithdrawals] = await pool.query(
@@ -100,6 +103,13 @@ exports.getBetAnalytics = async (req, res, next) => {
   try {
     const { game_id, type, from, to } = req.query;
     const isModerator = req.user.role === 'moderator';
+
+    if (isModerator) {
+      const [mod] = await pool.query('SELECT is_deleted FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+      if (!mod.length || mod[0].is_deleted) {
+        return res.status(403).json({ error: 'Account deactivated.' });
+      }
+    }
 
     let query = `
       SELECT bn.number, SUM(bn.amount) as total_amount, COUNT(*) as bet_count
@@ -172,7 +182,7 @@ exports.getRevenueAnalytics = async (req, res, next) => {
     const [deposits] = await pool.query(`
       SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, SUM(amount) as total
       FROM deposits
-      WHERE status = 'approved' AND created_at >= DATE_SUB(${IST_NOW_SQL}, INTERVAL ? DAY)
+      WHERE status = 'completed' AND created_at >= DATE_SUB(${IST_NOW_SQL}, INTERVAL ? DAY)
       GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d') ORDER BY date
     `, [interval]);
 

@@ -78,7 +78,7 @@ export default function Dashboard() {
 
       {user?.role === 'admin' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard title="Approved Deposits Today" value={adminStats?.total_deposits_today || 0} color="green" />
+          <StatCard title="Deposits Today" value={adminStats?.total_deposits_today || 0} color="green" />
           <StatCard title="Approved Amount Today" value={`₹${Number(adminStats?.total_amount_today || 0).toLocaleString('en-IN')}`} color="blue" />
           <StatCard title="Fraud Attempts Today" value={adminStats?.fraud_attempts_today || 0} color="red" />
           <StatCard title="Active Moderators" value={adminStats?.active_moderators || 0} color="purple" />

@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
+const { clampPagination } = require('../utils/pagination');
 
 exports.requestWithdraw = async (req, res, next) => {
   const conn = await pool.getConnection();
@@ -91,8 +92,7 @@ exports.requestWithdraw = async (req, res, next) => {
 
 exports.getWithdrawHistory = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { page, limit, offset } = clampPagination(req.query);
 
     const [countResult] = await pool.query(
       'SELECT COUNT(*) as total FROM withdraw_requests WHERE user_id = ?', [req.user.id]
@@ -104,15 +104,15 @@ exports.getWithdrawHistory = async (req, res, next) => {
       JOIN bank_accounts ba ON wr.bank_id = ba.id
       WHERE wr.user_id = ?
       ORDER BY wr.created_at DESC LIMIT ? OFFSET ?
-    `, [req.user.id, parseInt(limit), offset]);
+    `, [req.user.id, limit, offset]);
 
     res.json({
       withdrawals,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+        totalPages: Math.ceil(countResult[0].total / limit),
       }
     });
   } catch (error) {
@@ -230,8 +230,8 @@ exports.rejectWithdraw = async (req, res, next) => {
 
 exports.getAllWithdrawals = async (req, res, next) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { status } = req.query;
+    const { page, limit, offset } = clampPagination(req.query);
 
     let query = `
       SELECT wr.*, u.name as user_name, u.phone as user_phone,
@@ -243,7 +243,7 @@ exports.getAllWithdrawals = async (req, res, next) => {
     const params = [];
 
     if (req.user.role === 'moderator') {
-      query += ' WHERE wr.user_id IN (SELECT id FROM users WHERE moderator_id = ?)';
+      query += ' WHERE wr.user_id IN (SELECT id FROM users WHERE moderator_id = ? AND is_deleted = 0)';
       params.push(req.user.id);
       if (status) {
         query += ' AND wr.status = ?';
@@ -258,17 +258,17 @@ exports.getAllWithdrawals = async (req, res, next) => {
     const [countResult] = await pool.query(countQuery, params);
 
     query += ' ORDER BY wr.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    params.push(limit, offset);
 
     const [withdrawals] = await pool.query(query, params);
 
     res.json({
       withdrawals,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+        totalPages: Math.ceil(countResult[0].total / limit),
       }
     });
   } catch (error) {

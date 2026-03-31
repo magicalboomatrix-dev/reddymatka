@@ -1,13 +1,13 @@
 const pool = require('../config/database');
-const { IST_NOW_SQL } = require('../utils/sql-time');
+const { clampPagination, escapeLike } = require('../utils/pagination');
 
 const LARGE_NEW_USER_DEPOSIT_THRESHOLD = 5000;
 const LARGE_NEW_USER_DEPOSIT_MAX_AGE_DAYS = 3;
 
 exports.listUsers = async (req, res, next) => {
   try {
-    const { search, role, moderator_id, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { search, role, moderator_id } = req.query;
+    const { page, limit, offset } = clampPagination(req.query);
 
     let query = `
       SELECT u.id, u.name, u.phone, u.role, u.moderator_id, u.referral_code, u.is_blocked, u.created_at,
@@ -28,7 +28,8 @@ exports.listUsers = async (req, res, next) => {
 
     if (search) {
       query += ' AND (u.name LIKE ? OR u.phone LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+      const escaped = escapeLike(search);
+      params.push(`%${escaped}%`, `%${escaped}%`);
     }
     if (role) {
       query += ' AND u.role = ?';
@@ -48,15 +49,15 @@ exports.listUsers = async (req, res, next) => {
     const [countResult] = await pool.query(countQuery, params);
 
     query += ' ORDER BY u.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    params.push(limit, offset);
 
     const [users] = await pool.query(query, params);
 
     res.json({
       users,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total: countResult[0].total,
         totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
       }
@@ -137,15 +138,15 @@ exports.getModeratorStats = async (req, res, next) => {
       SELECT m.id AS moderator_id,
              m.name AS moderator_name,
              m.upi_id,
-             m.qr_code_image,
              m.scanner_label,
-             COUNT(CASE WHEN d.status = 'approved' THEN 1 END) AS total_deposits,
-             COALESCE(SUM(CASE WHEN d.status = 'approved' THEN d.amount ELSE 0 END), 0) AS total_amount,
-             MAX(CASE WHEN d.status = 'approved' THEN d.created_at END) AS last_deposit_date
+             COUNT(d.id) AS total_deposits,
+             COALESCE(SUM(d.amount), 0) AS total_amount,
+             MAX(d.created_at) AS last_deposit_date
       FROM users m
-      LEFT JOIN deposits d ON COALESCE(d.moderator_id, (SELECT u.moderator_id FROM users u WHERE u.id = d.user_id)) = m.id
-      WHERE m.role = 'moderator'
-      GROUP BY m.id, m.name, m.upi_id, m.qr_code_image, m.scanner_label
+      LEFT JOIN users u2 ON u2.moderator_id = m.id AND u2.role = 'user'
+      LEFT JOIN deposits d ON d.user_id = u2.id AND d.status = 'completed'
+      WHERE m.role = 'moderator' AND m.is_deleted = 0
+      GROUP BY m.id, m.name, m.upi_id, m.scanner_label
       ORDER BY total_amount DESC, m.name ASC
     `);
 
@@ -160,17 +161,14 @@ exports.getModeratorTransactions = async (req, res, next) => {
     const { id } = req.params;
     const [transactions] = await pool.query(`
       SELECT d.id, d.amount, d.utr_number, d.status,
-             COALESCE(d.receipt_image, d.screenshot) AS receipt_image,
-             d.created_at, d.reject_reason,
-             approver.name AS approved_by_name,
-             COALESCE(d.approved_by_role, approver.role) AS approved_by_role,
+             d.payer_name, d.created_at,
              u.name AS user_name,
              u.phone AS user_phone
       FROM deposits d
       JOIN users u ON u.id = d.user_id
-      LEFT JOIN users approver ON approver.id = COALESCE(d.approved_by_id, d.approved_by)
-      WHERE COALESCE(d.moderator_id, u.moderator_id) = ?
+      WHERE u.moderator_id = ?
       ORDER BY d.created_at DESC
+      LIMIT 200
     `, [id]);
 
     res.json({ transactions });
@@ -179,76 +177,36 @@ exports.getModeratorTransactions = async (req, res, next) => {
   }
 };
 
-exports.getModeratorFloatTable = async (req, res, next) => {
-  try {
-    const [rows] = await pool.query(`
-      SELECT u.id AS moderator_id,
-             u.name AS moderator_name,
-             u.phone,
-             u.referral_code,
-             u.scanner_enabled,
-             COALESCE(mw.balance, 0) AS float_balance,
-             COUNT(CASE WHEN mwt.amount > 0 THEN 1 END) AS topup_count,
-             COALESCE(SUM(CASE WHEN mwt.amount > 0 THEN mwt.amount ELSE 0 END), 0) AS total_topups,
-             COALESCE(SUM(CASE WHEN mwt.amount < 0 THEN ABS(mwt.amount) ELSE 0 END), 0) AS total_deductions,
-             MAX(mwt.created_at) AS last_transaction_at,
-             MAX(CASE WHEN mwt.amount > 0 THEN mwt.created_at END) AS last_topup_at
-      FROM users u
-      LEFT JOIN moderator_wallet mw ON mw.moderator_id = u.id
-      LEFT JOIN moderator_wallet_transactions mwt ON mwt.moderator_id = u.id
-      WHERE u.role = 'moderator'
-      GROUP BY u.id, u.name, u.phone, u.referral_code, u.scanner_enabled, mw.balance
-      ORDER BY mw.balance ASC, u.name ASC
-    `);
-
-    res.json({ moderators: rows });
-  } catch (error) {
-    next(error);
-  }
-};
-
 exports.getModeratorDetail = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const [[moderatorRows], [depositTransactions], [floatTransactions], [assignedUsers], [notifications], [scannerAuditHistory]] = await Promise.all([
+    const [[moderatorRows], [depositTransactions], [assignedUsers], [notifications], [scannerAuditHistory]] = await Promise.all([
       pool.query(`
-        SELECT u.id, u.name, u.phone, u.referral_code, u.upi_id, u.qr_code_image,
+        SELECT u.id, u.name, u.phone, u.referral_code, u.upi_id,
                u.scanner_label, u.scanner_enabled, u.is_blocked, u.created_at,
-               COALESCE(mw.balance, 0) AS float_balance,
                (SELECT COUNT(*) FROM users assigned WHERE assigned.role = 'user' AND assigned.moderator_id = u.id) AS user_count,
-               (SELECT COUNT(*) FROM deposits d JOIN users du ON du.id = d.user_id WHERE COALESCE(d.moderator_id, du.moderator_id) = u.id) AS total_related_deposits,
-               (SELECT COUNT(*) FROM deposits d JOIN users du ON du.id = d.user_id WHERE COALESCE(d.moderator_id, du.moderator_id) = u.id AND d.status = 'pending') AS pending_deposits,
-               (SELECT COALESCE(SUM(d.amount), 0) FROM deposits d JOIN users du ON du.id = d.user_id WHERE COALESCE(d.moderator_id, du.moderator_id) = u.id AND d.status = 'approved') AS approved_deposit_amount,
-               (SELECT COUNT(*) FROM deposits d JOIN users du ON du.id = d.user_id WHERE COALESCE(d.moderator_id, du.moderator_id) = u.id AND d.status = 'approved') AS approved_deposit_count
+               (SELECT COUNT(*) FROM deposits d JOIN users du ON du.id = d.user_id WHERE du.moderator_id = u.id) AS total_related_deposits,
+               (
+                 SELECT COUNT(*)
+                 FROM pending_deposit_orders pdo
+                 JOIN users u2 ON u2.id = pdo.user_id
+                 WHERE u2.moderator_id = u.id AND pdo.status = 'pending' AND pdo.expires_at > NOW()
+               ) AS pending_deposits,
+               (SELECT COALESCE(SUM(d.amount), 0) FROM deposits d JOIN users du ON du.id = d.user_id WHERE du.moderator_id = u.id AND d.status = 'completed') AS approved_deposit_amount,
+               (SELECT COUNT(*) FROM deposits d JOIN users du ON du.id = d.user_id WHERE du.moderator_id = u.id AND d.status = 'completed') AS approved_deposit_count
         FROM users u
-        LEFT JOIN moderator_wallet mw ON mw.moderator_id = u.id
         WHERE u.id = ? AND u.role = 'moderator'
         LIMIT 1
       `, [id]),
       pool.query(`
-        SELECT d.id, d.amount, d.utr_number, d.status, d.reject_reason,
-               COALESCE(d.receipt_image, d.screenshot) AS receipt_image,
-               d.receipt_image_hash, d.created_at, COALESCE(d.approved_at, d.updated_at) AS reviewed_at,
-               u.id AS user_id, u.name AS user_name, u.phone AS user_phone, u.created_at AS user_created_at,
-               approver.id AS approved_by_id, approver.name AS approved_by_name,
-               COALESCE(d.approved_by_role, approver.role) AS approved_by_role,
-               CASE
-                 WHEN d.amount >= ? AND TIMESTAMPDIFF(DAY, u.created_at, d.created_at) <= ? THEN 1
-                 ELSE 0
-               END AS large_new_user_flag
+        SELECT d.id, d.amount, d.utr_number, d.status,
+               d.payer_name, d.created_at,
+               u.id AS user_id, u.name AS user_name, u.phone AS user_phone, u.created_at AS user_created_at
         FROM deposits d
         JOIN users u ON u.id = d.user_id
-        LEFT JOIN users approver ON approver.id = COALESCE(d.approved_by_id, d.approved_by)
-        WHERE COALESCE(d.moderator_id, u.moderator_id) = ?
+        WHERE u.moderator_id = ?
         ORDER BY d.created_at DESC
-      `, [LARGE_NEW_USER_DEPOSIT_THRESHOLD, LARGE_NEW_USER_DEPOSIT_MAX_AGE_DAYS, id]),
-      pool.query(`
-        SELECT mwt.id, mwt.type, mwt.amount, mwt.balance_after, mwt.reference_id, mwt.remark, mwt.created_at,
-               actor.id AS actor_id, actor.name AS actor_name, actor.role AS actor_role
-        FROM moderator_wallet_transactions mwt
-        LEFT JOIN users actor ON actor.id = mwt.created_by
-        WHERE mwt.moderator_id = ?
-        ORDER BY mwt.created_at DESC
+        LIMIT 200
       `, [id]),
       pool.query(`
         SELECT u.id, u.name, u.phone, u.referral_code, u.is_blocked, u.created_at,
@@ -289,7 +247,6 @@ exports.getModeratorDetail = async (req, res, next) => {
     res.json({
       moderator: moderatorRows[0],
       deposit_transactions: depositTransactions,
-      float_transactions: floatTransactions,
       assigned_users: assignedUsers,
       notifications,
       scanner_audit_history: scannerAuditHistory,
@@ -314,17 +271,12 @@ exports.getUserDetail = async (req, res, next) => {
         LIMIT 1
       `, [id]),
       pool.query(`
-        SELECT d.id, d.amount, d.utr_number, d.status, d.reject_reason,
-               COALESCE(d.receipt_image, d.screenshot) AS receipt_image,
-               d.receipt_image_hash, d.created_at, COALESCE(d.approved_at, d.updated_at) AS reviewed_at,
-               moderator.id AS moderator_id, moderator.name AS moderator_name,
-               approver.id AS approved_by_id, approver.name AS approved_by_name,
-               COALESCE(d.approved_by_role, approver.role) AS approved_by_role
+        SELECT d.id, d.amount, d.utr_number, d.status,
+               d.payer_name, d.created_at
         FROM deposits d
-        LEFT JOIN users moderator ON moderator.id = d.moderator_id
-        LEFT JOIN users approver ON approver.id = COALESCE(d.approved_by_id, d.approved_by)
         WHERE d.user_id = ?
         ORDER BY d.created_at DESC
+        LIMIT 200
       `, [id]),
       pool.query(`
         SELECT wr.id, wr.amount, wr.status, wr.reject_reason, wr.created_at, wr.updated_at,
@@ -335,12 +287,14 @@ exports.getUserDetail = async (req, res, next) => {
         LEFT JOIN users approver ON approver.id = wr.approved_by
         WHERE wr.user_id = ?
         ORDER BY wr.created_at DESC
+        LIMIT 200
       `, [id]),
       pool.query(`
         SELECT id, type, amount, balance_after, status, reference_type, reference_id, remark, created_at
         FROM wallet_transactions
         WHERE user_id = ?
         ORDER BY created_at DESC
+        LIMIT 200
       `, [id]),
       pool.query(`
         SELECT b.id, b.type, b.total_amount, b.win_amount, b.status, b.created_at,
@@ -354,6 +308,7 @@ exports.getUserDetail = async (req, res, next) => {
         WHERE b.user_id = ?
         GROUP BY b.id, b.type, b.total_amount, b.win_amount, b.status, b.created_at, g.name, gr.result_number, gr.result_date
         ORDER BY b.created_at DESC
+        LIMIT 200
       `, [id]),
       pool.query(`
         SELECT id, type, amount, reference_id, created_at
@@ -397,21 +352,32 @@ exports.getUserDetail = async (req, res, next) => {
 
 exports.getFraudLogs = async (req, res, next) => {
   try {
-    const [logs] = await pool.query(`
-      SELECT l.id, l.utr, l.created_at,
-             attempted.id AS attempt_user_id,
-             attempted.name AS attempt_user_name,
-             attempted.phone AS attempt_user_phone,
-             original.id AS original_user_id,
-             original.name AS original_user_name,
-             original.phone AS original_user_phone
-      FROM utr_attempt_logs l
-      JOIN users attempted ON attempted.id = l.attempt_user_id
-      LEFT JOIN users original ON original.id = l.original_user_id
-      ORDER BY l.created_at DESC
-    `);
+    const { page, limit, offset } = clampPagination(req.query);
 
-    res.json({ logs });
+    const [countResult] = await pool.query(
+      "SELECT COUNT(*) as total FROM auto_deposit_logs WHERE action IN ('duplicate_ref', 'duplicate_utr', 'user_blocked')"
+    );
+
+    const [logs] = await pool.query(`
+      SELECT adl.id, adl.action, adl.details, adl.created_at,
+             adl.webhook_txn_id, adl.order_id, adl.deposit_id,
+             u.id AS user_id, u.name AS user_name, u.phone AS user_phone
+      FROM auto_deposit_logs adl
+      LEFT JOIN users u ON u.id = adl.user_id
+      WHERE adl.action IN ('duplicate_ref', 'duplicate_utr', 'user_blocked')
+      ORDER BY adl.created_at DESC
+      LIMIT ? OFFSET ?
+    `, [limit, offset]);
+
+    res.json({
+      logs,
+      pagination: {
+        page,
+        limit,
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / parseInt(limit)),
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -419,35 +385,23 @@ exports.getFraudLogs = async (req, res, next) => {
 
 exports.getFraudAlerts = async (req, res, next) => {
   try {
-    const [duplicateUtrs, reusedReceipts, excessiveApprovals, largeNewUserDeposits] = await Promise.all([
+    const [duplicateRefs, duplicatePayers, largeNewUserDeposits] = await Promise.all([
       pool.query(`
         SELECT COUNT(*) AS attempts_today
-        FROM utr_attempt_logs
-        WHERE DATE(created_at) = DATE(${IST_NOW_SQL})
+        FROM auto_deposit_logs
+        WHERE action IN ('duplicate_ref', 'duplicate_utr')
+          AND DATE(created_at) = CURDATE()
       `),
       pool.query(`
-        SELECT receipt_image_hash, COUNT(*) AS duplicate_count,
-               GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ', ') AS users,
-               GROUP_CONCAT(DISTINCT d.utr_number ORDER BY d.utr_number SEPARATOR ', ') AS utrs
-        FROM deposits d
-        JOIN users u ON u.id = d.user_id
-        WHERE d.receipt_image_hash IS NOT NULL
-        GROUP BY d.receipt_image_hash
-        HAVING COUNT(*) > 1
-        ORDER BY duplicate_count DESC
-        LIMIT 10
-      `),
-      pool.query(`
-        SELECT approver.id AS approver_id, approver.name AS approver_name,
-               COALESCE(d.approved_by_role, approver.role) AS approver_role,
-               COUNT(*) AS approval_count
-        FROM deposits d
-        JOIN users approver ON approver.id = COALESCE(d.approved_by_id, d.approved_by)
-        WHERE d.status = 'approved'
-          AND DATE(COALESCE(d.approved_at, d.updated_at)) = DATE(${IST_NOW_SQL})
-        GROUP BY approver.id, approver.name, COALESCE(d.approved_by_role, approver.role)
-        HAVING COUNT(*) >= 10
-        ORDER BY approval_count DESC
+        SELECT payer_name, COUNT(*) AS txn_count, COUNT(DISTINCT matched_order_id) AS distinct_orders
+        FROM upi_webhook_transactions
+        WHERE status = 'matched'
+          AND payer_name IS NOT NULL
+          AND created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+        GROUP BY payer_name
+        HAVING txn_count > 3
+        ORDER BY txn_count DESC
+        LIMIT 20
       `),
       pool.query(`
         SELECT d.id, d.amount, d.created_at, u.name AS user_name, u.phone AS user_phone,
@@ -463,13 +417,11 @@ exports.getFraudAlerts = async (req, res, next) => {
 
     res.json({
       summary: {
-        fraud_attempts_today: duplicateUtrs[0][0]?.attempts_today || 0,
-        reused_receipt_groups: reusedReceipts[0].length,
-        excessive_approver_count: excessiveApprovals[0].length,
+        fraud_attempts_today: duplicateRefs[0][0]?.attempts_today || 0,
+        suspicious_payer_count: duplicatePayers[0].length,
         large_new_user_deposit_count: largeNewUserDeposits[0].length,
       },
-      reused_receipts: reusedReceipts[0],
-      excessive_approvals: excessiveApprovals[0],
+      suspicious_payers: duplicatePayers[0],
       large_new_user_deposits: largeNewUserDeposits[0],
     });
   } catch (error) {
@@ -484,18 +436,19 @@ exports.getDashboardStats = async (req, res, next) => {
         SELECT COUNT(*) AS total_deposits_today,
                COALESCE(SUM(amount), 0) AS total_amount_today
         FROM deposits
-        WHERE status = 'approved'
-          AND DATE(COALESCE(approved_at, updated_at)) = DATE(${IST_NOW_SQL})
+        WHERE status = 'completed'
+          AND DATE(created_at) = CURDATE()
       `),
       pool.query(`
         SELECT COUNT(*) AS fraud_attempts_today
-        FROM utr_attempt_logs
-        WHERE DATE(created_at) = DATE(${IST_NOW_SQL})
+        FROM auto_deposit_logs
+        WHERE action IN ('duplicate_ref', 'duplicate_utr')
+          AND DATE(created_at) = CURDATE()
       `),
       pool.query(`
         SELECT COUNT(*) AS active_moderators
         FROM users
-        WHERE role = 'moderator' AND is_blocked = 0 AND scanner_enabled = 1
+        WHERE role = 'moderator' AND is_blocked = 0 AND is_deleted = 0 AND scanner_enabled = 1
       `),
     ]);
 
@@ -593,6 +546,106 @@ exports.updateBonusRates = async (req, res, next) => {
     } finally {
       conn.release();
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getUpiManagement = async (req, res, next) => {
+  try {
+    const [moderators, admins, auditLogs, depositStats] = await Promise.all([
+      pool.query(`
+        SELECT u.id, u.name, u.phone, u.referral_code, u.upi_id,
+               u.scanner_label, u.scanner_enabled, u.is_blocked, u.created_at, u.updated_at,
+               (SELECT COUNT(*) FROM users assigned WHERE assigned.role = 'user' AND assigned.moderator_id = u.id) AS user_count
+        FROM users u
+        WHERE u.role = 'moderator' AND u.is_deleted = 0
+        ORDER BY u.scanner_enabled DESC, u.name ASC
+      `),
+      pool.query(`
+        SELECT u.id, u.name, u.phone, u.upi_id, u.updated_at
+        FROM users u
+        WHERE u.role = 'admin'
+      `),
+      pool.query(`
+        SELECT sal.id, sal.moderator_id, sal.field_name, sal.old_value, sal.new_value, sal.created_at,
+               sal.actor_role,
+               actor.name AS actor_name,
+               target.name AS moderator_name
+        FROM moderator_scanner_audit_logs sal
+        LEFT JOIN users actor ON actor.id = sal.actor_id
+        LEFT JOIN users target ON target.id = sal.moderator_id
+        ORDER BY sal.created_at DESC
+        LIMIT 200
+      `),
+      pool.query(`
+        SELECT m.id AS moderator_id,
+               COUNT(d.id) AS total_deposits,
+               COALESCE(SUM(d.amount), 0) AS total_collected,
+               COALESCE(SUM(CASE WHEN d.created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) THEN d.amount ELSE 0 END), 0) AS collected_today,
+               COALESCE(SUM(CASE WHEN d.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN d.amount ELSE 0 END), 0) AS collected_7d,
+               COALESCE(SUM(CASE WHEN d.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) THEN d.amount ELSE 0 END), 0) AS collected_30d,
+               MAX(d.created_at) AS last_deposit_at
+        FROM users m
+        LEFT JOIN users u2 ON u2.moderator_id = m.id AND u2.role = 'user'
+        LEFT JOIN deposits d ON d.user_id = u2.id AND d.status = 'completed'
+        WHERE m.role = 'moderator' AND m.is_deleted = 0
+        GROUP BY m.id
+      `)
+    ]);
+
+    const statsMap = {};
+    depositStats[0].forEach(row => { statsMap[row.moderator_id] = row; });
+
+    const enrichedModerators = moderators[0].map(mod => ({
+      ...mod,
+      total_deposits: statsMap[mod.id]?.total_deposits || 0,
+      total_collected: Number(statsMap[mod.id]?.total_collected || 0),
+      collected_today: Number(statsMap[mod.id]?.collected_today || 0),
+      collected_7d: Number(statsMap[mod.id]?.collected_7d || 0),
+      collected_30d: Number(statsMap[mod.id]?.collected_30d || 0),
+      last_deposit_at: statsMap[mod.id]?.last_deposit_at || null,
+    }));
+
+    res.json({
+      moderators: enrichedModerators,
+      admins: admins[0],
+      audit_logs: auditLogs[0],
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateAdminUpi = async (req, res, next) => {
+  try {
+    const { upi_id } = req.body;
+    const adminId = req.user.id;
+
+    // Validate UPI format
+    const value = String(upi_id || '').trim();
+    if (value) {
+      if (!value.includes('@')) {
+        return res.status(400).json({ error: 'UPI ID must include @handle.' });
+      }
+      const [username, handle, ...extra] = value.split('@');
+      if (!username || !handle || extra.length > 0) {
+        return res.status(400).json({ error: 'UPI ID must be in format name@provider.' });
+      }
+      if (!/^[a-zA-Z0-9._-]{2,}$/.test(username)) {
+        return res.status(400).json({ error: 'UPI user part contains invalid characters.' });
+      }
+      if (!/^[a-zA-Z0-9.-]{2,}$/.test(handle)) {
+        return res.status(400).json({ error: 'UPI handle contains invalid characters.' });
+      }
+    }
+
+    await pool.query(
+      'UPDATE users SET upi_id = ? WHERE id = ? AND role = ?',
+      [value || null, adminId, 'admin']
+    );
+
+    res.json({ message: 'Admin UPI updated.' });
   } catch (error) {
     next(error);
   }

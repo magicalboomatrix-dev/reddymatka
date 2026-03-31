@@ -1,6 +1,7 @@
 const pool = require('../config/database');
 const XLSX = require('xlsx');
 const { isResultVisible, getResultDate, resolveGameWindow } = require('../utils/game-time');
+const { escapeLike } = require('../utils/pagination');
 
 function normalizeResultNumber(value) {
   const trimmed = String(value ?? '').trim();
@@ -355,8 +356,9 @@ exports.getResultHistory = async (req, res, next) => {
     }
 
     if (req.query.search) {
+      const escaped = escapeLike(req.query.search);
       filters.push('(g.name LIKE ? OR gr.result_number LIKE ?)');
-      params.push(`%${req.query.search}%`, `%${req.query.search}%`);
+      params.push(`%${escaped}%`, `%${escaped}%`);
     }
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';

@@ -1,6 +1,7 @@
 const pool = require('../config/database');
 const { settleBetsForGame } = require('./settle-bets');
 const { canSettleGame } = require('./game-time');
+const logger = require('./logger');
 
 const MAX_ATTEMPTS = 3;
 const STALE_PROCESSING_MINUTES = 5;
@@ -116,7 +117,7 @@ async function processQueue() {
     await conn.commit();
 
     if (count > 0) {
-      console.log(`[settle-worker] Queue #${job.queue_id} — Game ${job.game_id} (${job.game_name}), date ${job.result_date}: settled ${count} bets`);
+      logger.info('settle-worker', `Settled ${count} bets`, { queueId: job.queue_id, gameId: job.game_id, gameName: job.game_name, resultDate: job.result_date });
     }
   } catch (err) {
     try { await conn.rollback(); } catch (_) { /* ignore rollback errors */ }
@@ -136,7 +137,7 @@ async function processQueue() {
       }
     } catch (_) { /* best-effort */ }
 
-    console.error('[settle-worker] Error:', err.message);
+    logger.error('settle-worker', 'Settlement error', err);
   } finally {
     conn.release();
   }
@@ -148,7 +149,7 @@ let intervalId = null;
 
 function startAutoSettle(intervalMs = 15_000) {
   if (intervalId) return;
-  console.log('[settle-worker] Started — polling every', intervalMs / 1000, 'seconds');
+  logger.info('settle-worker', `Started — polling every ${intervalMs / 1000} seconds`);
   processQueue();
   intervalId = setInterval(processQueue, intervalMs);
 }

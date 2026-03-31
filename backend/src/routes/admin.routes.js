@@ -10,7 +10,6 @@ router.put('/settings', authenticate, authorize('admin'), adminController.update
 router.get('/flagged-accounts', authenticate, authorize('admin'), adminController.getFlaggedAccounts);
 router.get('/moderator-stats', authenticate, authorize('admin'), adminController.getModeratorStats);
 router.get('/moderator-stats/:id/transactions', authenticate, authorize('admin'), adminController.getModeratorTransactions);
-router.get('/moderator-floats', authenticate, authorize('admin'), adminController.getModeratorFloatTable);
 router.get('/moderators/:id/detail', authenticate, authorize('admin'), adminController.getModeratorDetail);
 router.get('/users/:id/detail', authenticate, authorize('admin'), adminController.getUserDetail);
 router.get('/fraud-logs', authenticate, authorize('admin'), adminController.getFraudLogs);
@@ -20,5 +19,7 @@ router.get('/payout-rates', authenticate, authorize('admin'), adminController.ge
 router.put('/payout-rates', authenticate, authorize('admin'), adminController.updatePayoutRates);
 router.get('/bonus-rates', authenticate, authorize('admin'), adminController.getBonusRates);
 router.put('/bonus-rates', authenticate, authorize('admin'), adminController.updateBonusRates);
+router.get('/upi-management', authenticate, authorize('admin'), adminController.getUpiManagement);
+router.put('/upi-management/admin-upi', authenticate, authorize('admin'), adminController.updateAdminUpi);
 
 module.exports = router;

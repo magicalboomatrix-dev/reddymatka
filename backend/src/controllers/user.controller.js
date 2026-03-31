@@ -1,4 +1,5 @@
 const pool = require('../config/database');
+const { clampPagination } = require('../utils/pagination');
 
 exports.getProfile = async (req, res, next) => {
   try {
@@ -228,8 +229,8 @@ exports.setDefaultBankAccount = async (req, res, next) => {
 
 exports.getAccountStatement = async (req, res, next) => {
   try {
-    const { from, to, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { from, to } = req.query;
+    const { page, limit, offset } = clampPagination(req.query);
 
     let query = 'SELECT * FROM wallet_transactions WHERE user_id = ?';
     const params = [req.user.id];
@@ -248,17 +249,17 @@ exports.getAccountStatement = async (req, res, next) => {
     const total = countResult[0].total;
 
     query += ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    params.push(limit, offset);
 
     const [transactions] = await pool.query(query, params);
 
     res.json({
       transactions,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total,
-        totalPages: Math.ceil(total / parseInt(limit)),
+        totalPages: Math.ceil(total / limit),
       }
     });
   } catch (error) {
@@ -268,8 +269,8 @@ exports.getAccountStatement = async (req, res, next) => {
 
 exports.getProfitLoss = async (req, res, next) => {
   try {
-    const { from, to, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { from, to } = req.query;
+    const { page, limit, offset } = clampPagination(req.query);
 
     let query = `
       SELECT b.id, b.type as event_type, g.name as event, b.total_amount, b.win_amount,
@@ -294,17 +295,17 @@ exports.getProfitLoss = async (req, res, next) => {
     const total = countResult[0].total;
 
     query += ' ORDER BY b.created_at DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), offset);
+    params.push(limit, offset);
 
     const [records] = await pool.query(query, params);
 
     res.json({
       records,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total,
-        totalPages: Math.ceil(total / parseInt(limit)),
+        totalPages: Math.ceil(total / limit),
       }
     });
   } catch (error) {
@@ -319,6 +320,7 @@ exports.getUiConfig = async (req, res, next) => {
        FROM settings
        WHERE setting_key IN (
          'min_deposit',
+         'max_deposit',
          'min_withdraw',
          'max_withdraw_time_minutes',
          'first_deposit_bonus_percent',
@@ -332,6 +334,7 @@ exports.getUiConfig = async (req, res, next) => {
     }, {});
 
     const minDeposit = Number(settingsMap.min_deposit || 100);
+    const maxDeposit = Number(settingsMap.max_deposit || 50000);
     const minWithdraw = Number(settingsMap.min_withdraw || 200);
     const maxWithdrawTimeMinutes = Number(settingsMap.max_withdraw_time_minutes || 45);
     const firstDepositBonusPercent = Number(settingsMap.first_deposit_bonus_percent || 0);
@@ -340,6 +343,7 @@ exports.getUiConfig = async (req, res, next) => {
     res.json({
       settings: {
         min_deposit: minDeposit,
+        max_deposit: maxDeposit,
         min_withdraw: minWithdraw,
         max_withdraw_time_minutes: maxWithdrawTimeMinutes,
         first_deposit_bonus_percent: firstDepositBonusPercent,
@@ -347,10 +351,11 @@ exports.getUiConfig = async (req, res, next) => {
       },
       deposit_guidelines: [
         `Minimum deposit amount is Rs ${minDeposit}.`,
-        'Enter the exact deposited amount and UTR number.',
-        'Pay only to the assigned moderator scanner shown above.',
-        'Upload payment screenshot for faster verification.',
-        'Deposits are credited after moderator or admin approval.',
+        `Maximum deposit amount is Rs ${maxDeposit.toLocaleString('en-IN')}.`,
+        'Enter the deposit amount and pay via UPI to the given ID.',
+        'Send the exact amount shown on screen.',
+        'Your deposit will be automatically detected and credited.',
+        'Do not close the page while waiting for confirmation.',
       ],
       withdraw_guidelines: [
         `Minimum withdrawal amount is Rs ${minWithdraw}.`,

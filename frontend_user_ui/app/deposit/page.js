@@ -1,48 +1,24 @@
-
 'use client'
-import React, { useState, useEffect } from 'react'
-import Link from 'next/link'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+import QRCode from 'react-qr-code'
 import DepositWithdrawBtns from '../components/DepositWithdrawBtns'
-import { depositAPI, userAPI } from '../lib/api'
-import { formatApprovalRole, formatStatusLabel } from '../lib/formatters'
+import { autoDepositAPI, depositAPI, userAPI } from '../lib/api'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
-const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, '');
-
-function formatApprovalLabel(deposit) {
-  if (!deposit?.approved_by_role || !deposit?.approved_by_name) {
-    return '-';
-  }
-
-  const roleLabel = formatApprovalRole(deposit.approved_by_role);
-  const actionLabel = deposit.status === 'rejected' ? 'Rejected by' : 'Approved by';
-  return `${actionLabel}: ${roleLabel} ${deposit.approved_by_name}`;
-}
-
-const DipositPage = () => {
+const DepositPage = () => {
   const [amount, setAmount] = useState('');
-  const [utr, setUtr] = useState('');
-  const [screenshot, setScreenshot] = useState(null);
-  const [screenshotPreview, setScreenshotPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [history, setHistory] = useState([]);
-  const [scanner, setScanner] = useState(null);
-  const [scannerError, setScannerError] = useState('');
   const [depositGuidelines, setDepositGuidelines] = useState([]);
+  const [depositLimits, setDepositLimits] = useState({ min: 100, max: 50000 });
 
-  useEffect(() => {
-    if (!screenshot) {
-      setScreenshotPreview('');
-      return;
-    }
-
-    const objectUrl = URL.createObjectURL(screenshot);
-    setScreenshotPreview(objectUrl);
-
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [screenshot]);
+  // Active order state
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [paymentDetails, setPaymentDetails] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const pollRef = useRef(null);
+  const timerRef = useRef(null);
 
   const fetchHistory = async () => {
     try {
@@ -51,45 +27,145 @@ const DipositPage = () => {
     } catch {}
   };
 
-  const fetchScanner = async () => {
-    try {
-      const res = await depositAPI.scanner();
-      setScanner(res);
-      setScannerError('');
-    } catch (err) {
-      setScanner(null);
-      setScannerError(err.message || 'Deposit scanner is not assigned yet.');
-    }
-  };
-
   useEffect(() => {
     fetchHistory();
-    fetchScanner();
-    userAPI.getUiConfig().then((res) => setDepositGuidelines(res.deposit_guidelines || [])).catch(() => setDepositGuidelines([]));
+    userAPI.getUiConfig().then((res) => {
+      setDepositGuidelines(res.deposit_guidelines || []);
+      if (res.settings) {
+        setDepositLimits({
+          min: Number(res.settings.min_deposit) || 100,
+          max: Number(res.settings.max_deposit) || 50000,
+        });
+      }
+    }).catch(() => setDepositGuidelines([]));
+
+    // Check for existing pending orders on mount
+    autoDepositAPI.getMyOrders({ status: 'pending', limit: 1 }).then((res) => {
+      const orders = res.orders || [];
+      if (orders.length > 0) {
+        const order = orders[0];
+        const expiresAt = new Date(order.expires_at).getTime();
+        const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+        if (remaining > 0) {
+          setActiveOrder(order);
+          setTimeLeft(remaining);
+          setPaymentDetails({
+            upi_id: order.upi_id || '',
+            payee_name: order.payee_name || '',
+            amount: parseFloat(order.amount),
+            pay_amount: order.pay_amount ? parseFloat(order.pay_amount) : parseFloat(order.amount),
+            order_ref: order.order_ref || null,
+            upi_link: order.upi_link || null,
+            qr_code: order.qr_code || null,
+          });
+        }
+      }
+    }).catch(() => {});
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
-  const handleSubmit = async (e) => {
+  // Countdown timer
+  useEffect(() => {
+    if (!activeOrder || timeLeft <= 0) return;
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          clearInterval(pollRef.current);
+          setActiveOrder(null);
+          setPaymentDetails(null);
+          setError('Deposit order expired. Please create a new one.');
+          fetchHistory();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [activeOrder]);
+
+  // Poll order status
+  const startPolling = useCallback((orderId) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await autoDepositAPI.getOrderStatus(orderId);
+        const order = res.order;
+        if (order.status === 'matched') {
+          clearInterval(pollRef.current);
+          clearInterval(timerRef.current);
+          setActiveOrder(null);
+          setPaymentDetails(null);
+          setSuccess(`Deposit of ₹${parseFloat(order.amount).toLocaleString('en-IN')} has been verified and credited!`);
+          fetchHistory();
+        } else if (order.status === 'expired' || order.status === 'cancelled') {
+          clearInterval(pollRef.current);
+          clearInterval(timerRef.current);
+          setActiveOrder(null);
+          setPaymentDetails(null);
+          if (order.status === 'expired') setError('Order expired. Please try again.');
+          fetchHistory();
+        }
+      } catch {}
+    }, 5000);
+  }, []);
+
+  useEffect(() => {
+    if (activeOrder) {
+      startPolling(activeOrder.id);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeOrder, startPolling]);
+
+  const handleCreateOrder = async (e) => {
     e.preventDefault();
     setError(''); setSuccess('');
-    if (!amount || parseInt(amount) <= 0) { setError('Enter valid amount'); return; }
-    if (!utr) { setError('Enter UTR / transaction reference'); return; }
+    const parsed = parseInt(amount);
+    if (!parsed || parsed <= 0) { setError('Enter a valid amount'); return; }
 
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('amount', amount);
-      formData.append('utr_number', utr);
-      if (screenshot) formData.append('screenshot', screenshot);
-
-      await depositAPI.request(formData);
-      setSuccess('Deposit request submitted!');
-      setAmount(''); setUtr(''); setScreenshot(null);
-      fetchHistory();
+      const res = await autoDepositAPI.createOrder(parsed);
+      setActiveOrder(res.order);
+      setPaymentDetails(res.payment_details);
+      setTimeLeft(res.order.expires_in_seconds || 600);
+      setAmount('');
     } catch (err) {
-      setError(err.message || 'Failed to submit deposit');
+      if (err.message?.includes('already have a pending')) {
+        setError('You already have a pending order for this amount. Please wait or cancel it.');
+      } else {
+        setError(err.message || 'Failed to create deposit order');
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCancel = async () => {
+    if (!activeOrder) return;
+    try {
+      await autoDepositAPI.cancelOrder(activeOrder.id);
+      clearInterval(pollRef.current);
+      clearInterval(timerRef.current);
+      setActiveOrder(null);
+      setPaymentDetails(null);
+      setTimeLeft(0);
+    } catch (err) {
+      setError(err.message || 'Failed to cancel order');
+    }
+  };
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   return (
@@ -99,118 +175,160 @@ const DipositPage = () => {
         <h3 className="flex-1 text-center text-sm font-semibold text-[#111]">Deposit</h3>
       </header>
 
-        <div className='bg-white pb-6'>
-            
-            <DepositWithdrawBtns></DepositWithdrawBtns>
-            
-             <div className='mx-auto w-full max-w-[430px] '>    
-                
-            <div className="border border-[#d6b774] bg-white p-4 shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
+      <div className="bg-white pb-6">
+        <DepositWithdrawBtns />
 
-              <div className="mb-4 border border-[#fdba74] bg-[#fff7ed] p-3.5">
-                    <div className="mb-2 text-sm font-bold text-[#9a3412]">Assigned Moderator Payment Scanner</div>
-                    {scanner ? (
-                      <>
-                        <p className="mb-1.5 text-xs text-[#7c2d12]"><b>Label:</b> {scanner.scanner_label || 'Moderator Scanner'}</p>
-                        <p className="mb-3 text-xs text-[#7c2d12]"><b>UPI ID:</b> {scanner.upi_id || '-'}</p>
-                        {(scanner.qr_code_image || scanner.qr_image) && (
-                          <img
-                            src={scanner.qr_code_image_url || scanner.qr_image_url || `${BACKEND_BASE}/uploads/${scanner.qr_code_image || scanner.qr_image}`}
-                            alt={scanner.scanner_label || 'Moderator QR code'}
-                            className="mx-auto block w-full max-w-[280px] border border-[#fed7aa] bg-white p-2"
-                          />
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-[#9a3412]">{scannerError || 'Scanner not assigned yet.'}</p>
-                    )}
-                </div>
+        <div className="mx-auto w-full max-w-[430px]">
+          <div className="border border-[#d6b774] bg-white p-4 shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
 
-                {error && <div className="mb-2 bg-[#ffe0e0] px-2 py-2 text-xs text-[#c00]">{error}</div>}
-                {success && <div className="mb-2 bg-[#e0ffe0] px-2 py-2 text-xs text-[#060]">{success}</div>}
+            {error && <div className="mb-2 bg-[#ffe0e0] px-2 py-2 text-xs text-[#c00]">{error}</div>}
+            {success && <div className="mb-2 bg-[#e0ffe0] px-2 py-2 text-xs text-[#060]">{success}</div>}
 
-                <div className='mt-4'>
-                    <form onSubmit={handleSubmit}>
-                    <label className="mb-1 block text-sm"><b>Amount</b></label>
-                    <div><input className="h-11 w-full border border-[#d8d1c4] bg-[#faf7f0] px-4 text-sm" type='number' placeholder='Enter amount' value={amount} onChange={e => setAmount(e.target.value)} min="1" /></div>
-                    <label className="mb-1 mt-2.5 block text-sm"><b>UTR / Transaction ID</b></label>
-                    <div><input className="h-11 w-full border border-[#d8d1c4] bg-[#faf7f0] px-4 text-sm" type='text' placeholder='Enter UTR number' value={utr} onChange={e => setUtr(e.target.value)} /></div>
-                    <label className="mb-1 mt-2.5 block text-sm"><b>Screenshot (optional)</b></label>
-                    <div>
-                      <input className="w-full border border-[#d8d1c4] bg-[#faf7f0] px-4 py-3 text-sm" type='file' accept='image/*' onChange={e => setScreenshot(e.target.files[0] || null)} />
+            {/* Active order - show UPI details + countdown */}
+            {activeOrder && paymentDetails ? (
+              <div className="mt-2">
+                <div className="mb-3 border border-[#fdba74] bg-[#fff7ed] p-3.5">
+                  <div className="mb-2 text-sm font-bold text-[#9a3412]">Complete Your Payment</div>
+
+                  {paymentDetails.order_ref && (
+                    <div className="mb-2 rounded bg-[#fef3c7] border border-[#fcd34d] p-2 text-center">
+                      <span className="text-[10px] text-[#92400e]">Order Ref:</span>
+                      <span className="ml-1 font-mono text-sm font-bold text-[#9a3412]">{paymentDetails.order_ref}</span>
                     </div>
-                    {screenshot && (
-                      <div className="mt-2.5 border border-[#e5e7eb] bg-[#fafafa] p-2.5">
-                        <div className="mb-2 text-xs font-semibold text-[#111827]">
-                          Selected screenshot: {screenshot.name}
-                        </div>
-                        {screenshotPreview && (
-                          <img
-                            src={screenshotPreview}
-                            alt="Selected deposit screenshot"
-                            className="max-h-[220px] max-w-full object-contain"
-                          />
-                        )}
-                      </div>
-                    )}
-                    <button className="mt-4 h-11 w-full bg-[#111] text-sm font-semibold text-white" type="submit" disabled={loading}>{loading ? 'Submitting...' : 'Submit'}</button>
-                    </form>
+                  )}
+
+                  <p className="mb-1 text-xs text-[#7c2d12]"><b>Pay Exactly:</b> <span className="text-sm font-bold">₹{(paymentDetails.pay_amount || paymentDetails.amount).toFixed(2)}</span></p>
+                  <p className="mb-1 text-xs text-[#7c2d12]"><b>UPI ID:</b> {paymentDetails.upi_id}</p>
+                  {paymentDetails.payee_name && <p className="mb-1 text-xs text-[#7c2d12]"><b>Name:</b> {paymentDetails.payee_name}</p>}
+
+                  {/* UPI QR Code */}
+                  <div className="my-3 flex justify-center">
+                    <div className="rounded-lg bg-white p-3 shadow-md border border-[#e5e7eb]">
+                      {paymentDetails.qr_code ? (
+                        <img src={paymentDetails.qr_code} alt="UPI QR Code" width={180} height={180} />
+                      ) : (
+                        <QRCode
+                          value={paymentDetails.upi_link || `upi://pay?pa=${encodeURIComponent(paymentDetails.upi_id)}&am=${paymentDetails.pay_amount || paymentDetails.amount}&cu=INR${paymentDetails.order_ref ? `&tn=${encodeURIComponent('Deposit ' + paymentDetails.order_ref)}` : ''}`}
+                          size={180}
+                          level="M"
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-center text-[10px] text-[#9a3412] mb-2">Scan QR code with any UPI app</p>
+
+                  {paymentDetails.upi_link && (
+                    <a
+                      href={paymentDetails.upi_link}
+                      className="mt-2 block w-full rounded bg-[#f97316] py-2.5 text-center text-sm font-bold text-white"
+                    >
+                      Pay via UPI App
+                    </a>
+                  )}
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block h-2.5 w-2.5 animate-pulse rounded-full bg-[#f97316]"></span>
+                      <span className="text-xs font-semibold text-[#9a3412]">Time remaining: {formatTime(timeLeft)}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 bg-[#fef3c7] border border-[#fcd34d] p-2 text-[10px] text-[#92400e]">
+                    <p>1. Open your UPI app (GPay, PhonePe, Paytm, etc.)</p>
+                    <p>2. Send exactly <b>₹{(paymentDetails.pay_amount || paymentDetails.amount).toFixed(2)}</b> to <b>{paymentDetails.upi_id}</b></p>
+                    <p>3. The exact paise amount ensures your payment is matched correctly.</p>
+                    <p>4. Your deposit will be automatically detected and credited.</p>
+                    <p>5. Do NOT close this page until payment is confirmed.</p>
+                  </div>
                 </div>
-            </div>
 
-                <div className='mt-4 border border-[#d6b774] bg-white shadow-[0_12px_28px_rgba(79,52,10,0.08)]'>
-                <div>
-                <div className="px-3 py-3 text-left text-[10px] font-medium text-red-600">
-                    {(depositGuidelines.length > 0 ? depositGuidelines : ['Deposit instructions are currently unavailable.']).map((rule, index) => (
-                      <p key={`${rule}-${index}`}>{index + 1}. {rule}</p>
-                    ))}
+                <div className="flex items-center gap-2 text-xs text-[#6b7280]">
+                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-green-500"></span>
+                  Waiting for payment confirmation...
                 </div>
+
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="mt-3 h-10 w-full border border-[#d1d5db] bg-white text-xs font-semibold text-[#6b7280] hover:bg-[#f9fafb]"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            ) : (
+              /* Amount input form */
+              <div className="mt-4">
+                <form onSubmit={handleCreateOrder}>
+                  <label className="mb-1 block text-sm"><b>Amount</b></label>
+                  <div>
+                    <input
+                      className="h-11 w-full border border-[#d8d1c4] bg-[#faf7f0] px-4 text-sm"
+                      type="number"
+                      placeholder={`Enter amount (min ₹${depositLimits.min})`}
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      min={depositLimits.min}
+                      max={depositLimits.max}
+                    />
+                  </div>
+                  <button
+                    className="mt-4 h-11 w-full bg-[#111] text-sm font-semibold text-white"
+                    type="submit"
+                    disabled={loading}
+                  >
+                    {loading ? 'Creating...' : 'Deposit'}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 border border-[#d6b774] bg-white shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
+            <div className="px-3 py-3 text-left text-[10px] font-medium text-red-600">
+              {(depositGuidelines.length > 0 ? depositGuidelines : [
+                `Minimum deposit amount is ₹${depositLimits.min}.`,
+                `Maximum deposit amount is ₹${depositLimits.max.toLocaleString('en-IN')}.`,
+                'Send the exact amount via UPI to the given UPI ID.',
+                'Your deposit will be auto-detected within 1-2 minutes.',
+                'Do not close the page while waiting for confirmation.',
+              ]).map((rule, index) => (
+                <p key={index}>{index + 1}. {rule}</p>
+              ))}
             </div>
-            </div>           
+          </div>
 
-            <div className="mt-4 overflow-x-auto border border-[#ead8ab]">
-                <div>
-                <table className="w-full border-collapse text-left text-xs text-[#111]">
-                    <thead>
-                        <tr>
-                            <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">UTR</th>
-                            <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Amount</th>
-                          <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Receipt</th>
-                            <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Status</th>
-                          <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Review</th>
-                          <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Reason</th>
-                            <th className="border-b bg-[#f7f0e3] px-3 py-2">Date</th>
-                        </tr>
-                        </thead>
-
-                        <tbody>
-                            {history.map((d, i) => (
-                            <tr key={d.id || i}>
-                                <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{d.utr_number || '-'}</td>
-                                <td className="border-b border-r border-[#f0e3c6] px-3 py-2">₹{d.amount}</td>
-                            <td className="border-b border-r border-[#f0e3c6] px-3 py-2">
-                              {d.receipt_image ? (
-                              <a href={`${BACKEND_BASE}/uploads/${d.receipt_image}`} target="_blank" rel="noreferrer">View</a>
-                              ) : '-'}
-                            </td>
-                                <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{formatStatusLabel(d.status)}</td>
-                            <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{formatApprovalLabel(d)}</td>
-                            <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{d.reject_reason || '-'}</td>
-                                <td className="border-b px-3 py-2">{d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
-                            </tr>
-                            ))}
-                          {history.length === 0 && <tr><td className="px-3 py-6 text-center" colSpan="7">No deposits yet</td></tr>}
-                        </tbody>
-                </table>
-                </div>
-            </div>
-
-            </div>
-
+          {/* Deposit History */}
+          <div className="mt-4 overflow-x-auto border border-[#ead8ab]">
+            <table className="w-full border-collapse text-left text-xs text-[#111]">
+              <thead>
+                <tr>
+                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">UTR</th>
+                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Amount</th>
+                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Status</th>
+                  <th className="border-b bg-[#f7f0e3] px-3 py-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((d, i) => (
+                  <tr key={d.id || i}>
+                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2 font-mono">{d.utr_number || '-'}</td>
+                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2">?{parseFloat(d.amount).toLocaleString('en-IN')}</td>
+                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2">
+                      <span className="inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
+                        {d.status === 'approved' ? 'Approved' : d.status}
+                      </span>
+                    </td>
+                    <td className="border-b px-3 py-2">{d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
+                  </tr>
+                ))}
+                {history.length === 0 && <tr><td className="px-3 py-6 text-center" colSpan="4">No deposits yet</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
-
+      </div>
     </div>
   )
 }
 
-export default DipositPage
+export default DepositPage

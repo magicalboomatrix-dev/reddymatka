@@ -6,10 +6,9 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: '📊' },
   { path: '/users', label: 'Users', icon: '👥' },
   { path: '/moderators', label: 'Moderators', icon: '🛡️' },
-  { path: '/moderator-scanners', label: 'Moderator Scanners', icon: '📷' },
-  { path: '/moderator-floats', label: 'Moderator Floats', icon: '🏦' },
-  { path: '/payment-scanner', label: 'Payment Scanner', icon: '📱' },
   { path: '/deposits', label: 'Deposits', icon: '💰' },
+  { path: '/auto-deposits', label: 'Auto Deposits', icon: '⚡' },
+  { path: '/upi-management', label: 'UPI Management', icon: '🏦' },
   { path: '/withdrawals', label: 'Withdrawals', icon: '🏧' },
   { path: '/games', label: 'Games', icon: '🎮' },
   { path: '/results', label: 'Results', icon: '🧾' },
@@ -42,10 +41,7 @@ export default function Layout() {
         <nav className="mt-4 px-3 pb-4 flex-1 overflow-y-auto min-h-0">
           {navItems.map((item) => {
             // Filter moderator-only visible items
-            if (user?.role === 'moderator' && ['Moderators', 'Moderator Scanners', 'Moderator Floats', 'Games', 'Results', 'Settings', 'Fraud Alerts'].includes(item.label)) {
-              return null;
-            }
-            if (user?.role !== 'moderator' && item.label === 'Payment Scanner') {
+            if (user?.role === 'moderator' && ['Moderators', 'Games', 'Results', 'Settings', 'Fraud Alerts', 'UPI Management'].includes(item.label)) {
               return null;
             }
             const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(`${item.path}/`));
