@@ -274,7 +274,7 @@ exports.getProfitLoss = async (req, res, next) => {
 
     let query = `
       SELECT b.id, b.type as event_type, g.name as event, b.total_amount, b.win_amount,
-             (b.win_amount - b.total_amount) as profit_loss, b.status, b.created_at
+             (b.win_amount - b.total_amount) as profit_loss, b.status, b.session_date, b.created_at
       FROM bets b
       JOIN games g ON b.game_id = g.id
       WHERE b.user_id = ? AND b.status != 'pending'
@@ -282,12 +282,12 @@ exports.getProfitLoss = async (req, res, next) => {
     const params = [req.user.id];
 
     if (from) {
-      query += ' AND b.created_at >= ?';
+      query += ' AND b.session_date >= ?';
       params.push(from);
     }
     if (to) {
-      query += ' AND b.created_at <= ?';
-      params.push(to + ' 23:59:59');
+      query += ' AND b.session_date <= ?';
+      params.push(to);
     }
 
     const countQuery = `SELECT COUNT(*) as total FROM (${query}) as countTable`;

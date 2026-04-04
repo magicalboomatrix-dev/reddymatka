@@ -1,6 +1,13 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 
+function formatCurrency(amount) {
+  return `₹${Number(amount || 0).toLocaleString('en-IN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export default function Deposits() {
   const [deposits, setDeposits] = useState([]);
   const [pagination, setPagination] = useState({});
@@ -34,14 +41,16 @@ export default function Deposits() {
       )}
 
       <div className="text-sm text-gray-500">
-        All deposits are auto-verified via UPI webhook. Total: {pagination.total || 0}
+        All deposits are auto-verified via UPI webhook. Showing completed credits only. Total: {pagination.total || 0}
       </div>
 
       <div className="bg-white border overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left px-4 py-3 font-medium text-gray-600">ID</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Deposit</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Order</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Webhook</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">User</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Phone</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
@@ -54,16 +63,18 @@ export default function Deposits() {
           <tbody className="divide-y">
             {deposits.map((d) => (
               <tr key={d.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3">{d.id}</td>
+                <td className="px-4 py-3 font-medium">#{d.id}</td>
+                <td className="px-4 py-3 text-xs text-gray-600">{d.order_id ? `#${d.order_id}` : '-'}</td>
+                <td className="px-4 py-3 text-xs text-gray-600">{d.webhook_txn_id ? `#${d.webhook_txn_id}` : '-'}</td>
                 <td className="px-4 py-3 font-medium">{d.user_name}</td>
                 <td className="px-4 py-3">{d.user_phone}</td>
                 <td className="px-4 py-3 text-right font-semibold text-green-700">
-                  ?{parseFloat(d.amount).toLocaleString()}
+                  {formatCurrency(d.amount)}
                 </td>
                 <td className="px-4 py-3 font-mono text-xs">{d.utr_number || '-'}</td>
                 <td className="px-4 py-3 text-xs text-gray-600">{d.payer_name || '-'}</td>
                 <td className="px-4 py-3 text-center">
-                  <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
+                  <span className="rounded px-2 py-1 text-xs font-medium bg-green-100 text-green-700">
                     {d.status}
                   </span>
                 </td>
@@ -74,7 +85,7 @@ export default function Deposits() {
             ))}
             {deposits.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-gray-400">
+                <td colSpan={10} className="px-4 py-8 text-center text-gray-400">
                   {loading ? 'Loading...' : 'No deposits'}
                 </td>
               </tr>

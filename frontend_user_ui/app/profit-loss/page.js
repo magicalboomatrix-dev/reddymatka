@@ -26,7 +26,9 @@ const ProfitLoss = () => {
       const res = await userAPI.getProfitLoss({ from: fromDate, to: toDate, limit: 200 });
       setRows(res.records || res.bets || res.profitLoss || res.data || []);
       setPage(1);
-    } catch {} finally { setLoading(false); }
+    } catch (err) {
+      console.error('[profit-loss] fetch error:', err);
+    } finally { setLoading(false); }
   };
 
   const formatCurrency = (value) => `₹${Number(value || 0).toLocaleString('en-IN', {
@@ -79,7 +81,7 @@ const ProfitLoss = () => {
                         {currentRows.map((row, idx) => (
                             <tr key={row.id || idx}>
                             <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{start + idx + 1}</td>
-                            <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{row.created_at ? new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
+                            <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{(row.session_date || row.created_at) ? new Date(row.session_date || row.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
                           <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{row.event || row.game_name || '-'}</td>
                           <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{formatBetType(row.event_type || row.bet_type || '-')}</td>
                           <td className="border-b border-r border-[#f0e3c6] px-3 py-2">{formatCurrency(row.total_amount)}</td>

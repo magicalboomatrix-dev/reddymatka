@@ -14,10 +14,22 @@ const navItems = [
   { path: '/results', label: 'Results', icon: '🧾' },
   { path: '/analytics', label: 'Analytics', icon: '📈' },
   { path: '/notifications', label: 'Notifications', icon: '🔔' },
-  { path: '/fraud-alerts', label: 'Fraud Alerts', icon: '🚨' },
+  { path: '/fraud-logs', label: 'Fraud Alerts', icon: '🚨' },
+  { path: '/settlement-monitor', label: 'Settlement Monitor', icon: '⚙️' },
+  { path: '/wallet-audit', label: 'Wallet Audit', icon: '🔍' },
   { path: '/custom-ads', label: 'Custom Ads', icon: '📢' },
-  { path: '/settings', label: 'Settings', icon: '⚙️' },
+  { path: '/settings', label: 'Settings', icon: '🛠️' },
 ];
+
+const MODERATOR_HIDDEN_LABELS = new Set(['Moderators', 'Games', 'Results', 'Settings', 'Fraud Alerts', 'UPI Management', 'Settlement Monitor', 'Wallet Audit']);
+
+function isNavItemActive(locationPathname, itemPath) {
+  return locationPathname === itemPath || (itemPath !== '/' && locationPathname.startsWith(`${itemPath}/`));
+}
+
+function getCurrentPageLabel(locationPathname) {
+  return navItems.find((item) => isNavItemActive(locationPathname, item.path))?.label || 'Dashboard';
+}
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -40,11 +52,10 @@ export default function Layout() {
 
         <nav className="mt-4 px-3 pb-4 flex-1 overflow-y-auto min-h-0">
           {navItems.map((item) => {
-            // Filter moderator-only visible items
-            if (user?.role === 'moderator' && ['Moderators', 'Games', 'Results', 'Settings', 'Fraud Alerts', 'UPI Management'].includes(item.label)) {
+            if (user?.role === 'moderator' && MODERATOR_HIDDEN_LABELS.has(item.label)) {
               return null;
             }
-            const isActive = location.pathname === item.path || (item.path !== '/' && location.pathname.startsWith(`${item.path}/`));
+            const isActive = isNavItemActive(location.pathname, item.path);
             return (
               <Link
                 key={item.path}
@@ -90,8 +101,7 @@ export default function Layout() {
           </button>
 
           <h2 className="text-lg font-semibold text-gray-800">
-            {navItems.find((item) => location.pathname === item.path)
-              ?.label || navItems.find((item) => item.path !== '/' && location.pathname.startsWith(`${item.path}/`))?.label || 'Dashboard'}
+            {getCurrentPageLabel(location.pathname)}
           </h2>
 
           <div className="text-sm text-gray-500">

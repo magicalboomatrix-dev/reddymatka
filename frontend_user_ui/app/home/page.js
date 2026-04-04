@@ -10,6 +10,7 @@ import SkeletonBlock from "../components/SkeletonBlock";
 import Toast from "../components/Toast";
 import CustomAds from "../components/CustomAds";
 import { betAPI, gameAPI, resultAPI } from "../lib/api";
+import { getSocket, disconnectSocket } from "../lib/socket";
 
 function parseTimeParts(timeValue) {
   const parts = String(timeValue || "")
@@ -306,6 +307,32 @@ const HomePage = () => {
     }, 3000);
     return () => clearInterval(interval);
   }, [recentWinners]);
+
+  // Real-time socket: refresh games on result_declared, winners on bet_settled / recent_winner
+  useEffect(() => {
+    const socket = getSocket(); // cookie handles auth
+
+    socket.on('result_declared', () => {
+      loadGames();
+      loadLiveResults();
+    });
+
+    socket.on('bet_settled', () => {
+      loadRecentWinners();
+    });
+
+    socket.on('recent_winner', () => {
+      loadRecentWinners();
+    });
+
+    return () => {
+      socket.off('result_declared');
+      socket.off('bet_settled');
+      socket.off('recent_winner');
+      disconnectSocket();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Memoized helpers
   const getResultForGame = useCallback(

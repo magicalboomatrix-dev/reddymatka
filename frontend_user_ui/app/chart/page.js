@@ -7,6 +7,7 @@ import { resultAPI, gameAPI } from "../lib/api";
 const ChartPage = () => {
   const [games, setGames] = useState([]);
   const [selectedGame, setSelectedGame] = useState("");
+  const [error, setError] = useState("");
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear.toString());
   const [yearlyData, setYearlyData] = useState(null);
@@ -25,7 +26,11 @@ const ChartPage = () => {
     try {
       const res = await resultAPI.yearly({ city: gameName, year: yearValue });
       setYearlyData(res);
-    } catch {}
+      setError("");
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load chart data. Please try again.");
+    }
   };
 
   useEffect(() => {
@@ -36,7 +41,10 @@ const ChartPage = () => {
         setGames(g);
         if (g.length > 0) setSelectedGame(g[0].name);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error(err);
+        setError("Failed to load games.");
+      });
   }, []);
 
   useEffect(() => {
@@ -45,6 +53,11 @@ const ChartPage = () => {
     }
 
     fetchChart(selectedGame, selectedYear);
+
+    // Only poll for the current year — historical years don't change
+    if (selectedYear !== currentYear.toString()) {
+      return;
+    }
 
     const intervalId = setInterval(() => {
       fetchChart(selectedGame, selectedYear);
@@ -72,6 +85,9 @@ const ChartPage = () => {
           </div>
 
           <div className="border border-t-0 border-[#d6b774] bg-white  shadow-[0_12px_28px_rgba(79,52,10,0.08)] p-3">
+            {error && (
+              <div className="mb-2 bg-[#ffe0e0] px-2 py-2 text-xs text-[#c00]">{error}</div>
+            )}
             <div className="flex gap-1">
               <select
                 className="h-9 flex-1 border border-[#d8d1c4] bg-[#faf7f0] px-2 text-sm font-medium text-[#111] outline-none"
@@ -86,7 +102,7 @@ const ChartPage = () => {
               </select>
 
               <select
-                className="h-9flex-1 border border-[#d8d1c4] bg-[#faf7f0] px-2 text-sm font-medium text-[#111] outline-none"
+                className="h-9 flex-1 border border-[#d8d1c4] bg-[#faf7f0] px-2 text-sm font-medium text-[#111] outline-none"
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
               >

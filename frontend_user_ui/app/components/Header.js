@@ -2,6 +2,7 @@ import Link from 'next/link'
 import React, { useState, useEffect } from 'react'
 import { useAuth } from '../lib/AuthContext'
 import { notificationAPI, walletAPI } from '../lib/api'
+import { getSocket } from '../lib/socket'
 
 const NOTICE_TEXT = 'महत्वपूर्ण सूचना: हम केवल संख्याओं के अनुमान/भविष्यवाणी प्रदान करते हैं। हमारा किसी भी प्रकार के जुआ या सट्टेबाजी से कोई संबंध नहीं है। किसी भी लाभ या हानि के लिए आप स्वयं पूरी तरह से जिम्मेदार होंगे।';
 
@@ -28,6 +29,22 @@ const Header = () => {
       walletAPI.getInfo().then(applyWallet).catch(() => {});
       notificationAPI.my().then((response) => setNotifications(response.notifications || [])).catch(() => {});
     }
+  }, [isLoggedIn]);
+
+  // Live wallet balance via socket — no polling needed
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const sock = getSocket();
+    const handleWalletUpdated = ({ balance }) => {
+      setWallet((prev) => ({
+        ...prev,
+        balance: parseFloat(balance) || 0,
+        available_withdrawal: parseFloat(balance) || 0,
+        total: (parseFloat(balance) || 0) + (prev.bonus_balance || 0),
+      }));
+    };
+    sock.on('wallet_updated', handleWalletUpdated);
+    return () => { sock.off('wallet_updated', handleWalletUpdated); };
   }, [isLoggedIn]);
 
   const toggleDrawer = () => {
@@ -64,6 +81,9 @@ const Header = () => {
       <header>
         <div className="flex items-center justify-between px-2 py-1.5">
           <div className="flex items-center gap-4">
+            <button type="button" className="text-white" onClick={() => setOpenMenu(true)} aria-label="Open menu">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+            </button>
             <div className="flex items-center">
               <Link href="/"><img src="/images/logo.png" alt="Winbuzz" className="h-8 w-auto" /></Link>
             </div>
@@ -109,8 +129,21 @@ const Header = () => {
             <Link href="/"><img src="/images/logo.png" alt="Winbuzz" className="mx-auto h-10 w-auto" /></Link>
           </div>
           <ul className="mt-8 space-y-3 text-sm font-semibold text-white/90">
-            {['Multi Market', 'Cricket', 'Football', 'Tennis', 'Politics', 'Int Casino', 'Sports Book', 'Horse Racing', 'Greyhound Racing', 'Binary', 'Kabaddi', 'Basketball', 'Baseball'].map((item) => (
-              <li key={item} className="border border-white/10 px-4 py-3">{item}</li>
+            {[
+              { label: 'Home', href: '/home' },
+              { label: 'Games', href: '/game-page' },
+              { label: 'My Bets', href: '/my-bets' },
+              { label: 'Wallet', href: '/wallet' },
+              { label: 'Deposit', href: '/deposit' },
+              { label: 'Withdraw', href: '/withdraw' },
+              { label: 'Charts', href: '/chart' },
+              { label: 'Notifications', href: '/notifications' },
+              { label: 'Account Statement', href: '/account-statement' },
+              { label: 'Profit / Loss', href: '/profit-loss' },
+            ].map((item) => (
+              <li key={item.href} className="border border-white/10 px-4 py-3">
+                <Link href={item.href} onClick={() => setOpenMenu(false)}>{item.label}</Link>
+              </li>
             ))}
           </ul>
         </aside>

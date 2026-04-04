@@ -235,6 +235,9 @@ export default function Results() {
     setEditingResultId(row.id);
     setMessage('');
     setError('');
+    if (Number(row.linked_bet_count) > 0) {
+      setMessage(`⚠️ Warning: This result has already settled ${row.linked_bet_count} bet(s). Editing it will NOT re-settle bets.`);
+    }
     setResultForm({
       game_id: String(row.game_id),
       result_number: row.result_number || '',
@@ -255,9 +258,12 @@ export default function Results() {
   };
 
   const deleteSingle = async (row) => {
+    const hasBets = Number(row.linked_bet_count) > 0;
     const confirmed = await confirm({
       title: 'Delete Result',
-      message: `Delete result ${row.result_number} for ${row.game_name} on ${row.result_date?.slice(0, 10)}?`,
+      message: hasBets
+        ? `⚠️ This result has already settled ${row.linked_bet_count} bet(s). Deletion may cause balance inconsistencies. Proceed with deleting result ${row.result_number} for ${row.game_name} on ${row.result_date?.slice(0, 10)}?`
+        : `Delete result ${row.result_number} for ${row.game_name} on ${row.result_date?.slice(0, 10)}?`,
       confirmText: 'Delete',
       variant: 'danger',
     });

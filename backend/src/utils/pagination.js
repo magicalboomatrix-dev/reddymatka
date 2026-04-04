@@ -11,4 +11,4 @@ function escapeLike(str) {
   return String(str).replace(/[%_\\]/g, '\\$&');
 }
 
-module.exports = { clampPagination, escapeLike, MAX_PAGE_LIMIT };
+module.exports = { clampPagination, escapeLike };

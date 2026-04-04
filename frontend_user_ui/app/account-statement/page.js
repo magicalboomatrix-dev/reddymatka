@@ -26,7 +26,7 @@ const AccountStatement = () => {
       const res = await userAPI.getAccountStatement({ from: fromDate, to: toDate, limit: 200 });
       setRows(res.transactions || res.statement || []);
       setPage(1);
-    } catch {} finally { setLoading(false); }
+    } catch (err) { console.error('[account-statement] fetch error:', err); } finally { setLoading(false); }
   };
 
   const formatCurrency = (value) => `₹${Math.abs(Number(value || 0)).toLocaleString('en-IN', {

@@ -7,92 +7,87 @@ exports.getDashboard = async (req, res, next) => {
     const userScopeClause = isModerator ? ' AND moderator_id = ?' : '';
     const userScopeParams = isModerator ? [req.user.id] : [];
 
-    // Block soft-deleted moderators from accessing data
-    if (isModerator) {
-      const [mod] = await pool.query('SELECT is_deleted FROM users WHERE id = ? LIMIT 1', [req.user.id]);
-      if (!mod.length || mod[0].is_deleted) {
-        return res.status(403).json({ error: 'Account deactivated.' });
-      }
-    }
+    const currentDayFilter = (column) =>
+      `${column} >= ${IST_DATE_SQL} AND ${column} < ${IST_DATE_SQL} + INTERVAL 1 DAY`;
 
-    const currentDayFilter = (column) => `${column} >= ${IST_DATE_SQL} AND ${column} < ${IST_DATE_SQL} + INTERVAL 1 DAY`;
-
-    // Total users
-    const [userCount] = await pool.query(
-      `SELECT COUNT(*) as count FROM users WHERE role = 'user'${userScopeClause}`,
-      userScopeParams
-    );
-    
-    // Total deposits today
-    const [depositsToday] = await pool.query(
-      `SELECT COUNT(*) as count, COALESCE(SUM(d.amount), 0) as total
-       FROM deposits d
-       JOIN users u ON d.user_id = u.id
-       WHERE ${currentDayFilter('d.created_at')} AND d.status = 'completed'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
-      userScopeParams
-    );
-
-    // Total withdrawals today
-    const [withdrawalsToday] = await pool.query(
-      `SELECT COUNT(*) as count, COALESCE(SUM(wr.amount), 0) as total
-       FROM withdraw_requests wr
-       JOIN users u ON wr.user_id = u.id
-       WHERE ${currentDayFilter('wr.created_at')} AND wr.status = 'approved'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
-      userScopeParams
-    );
-
-    // Total bets today
-    const [betsToday] = await pool.query(
-      `SELECT COUNT(*) as count, COALESCE(SUM(b.total_amount), 0) as total
-       FROM bets b
-       JOIN users u ON b.user_id = u.id
-       WHERE ${currentDayFilter('b.created_at')}${isModerator ? ' AND u.moderator_id = ?' : ''}`,
-      userScopeParams
-    );
-
-    // Pending deposits (none — all auto-verified)
-    const pendingDeposits = [{ count: 0 }];
-
-    // Pending withdrawals
-    const [pendingWithdrawals] = await pool.query(
-      `SELECT COUNT(*) as count
-       FROM withdraw_requests wr
-       JOIN users u ON wr.user_id = u.id
-       WHERE wr.status = 'pending'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
-      userScopeParams
-    );
-
-    // Total wallet balance
-    const [totalBalance] = await pool.query(
-      `SELECT COALESCE(SUM(w.balance), 0) as total
-       FROM wallets w
-       JOIN users u ON w.user_id = u.id
-       WHERE u.role = 'user'${userScopeClause}`,
-      userScopeParams
-    );
-
-    // Recent activity
-    const [recentBets] = await pool.query(
-      `SELECT b.*, u.name as user_name, g.name as game_name
-       FROM bets b
-       JOIN users u ON b.user_id = u.id
-       JOIN games g ON b.game_id = g.id
-       WHERE 1 = 1${isModerator ? ' AND u.moderator_id = ?' : ''}
-       ORDER BY b.created_at DESC LIMIT 10`,
-      userScopeParams
-    );
+    // Run all independent queries in parallel instead of sequentially.
+    const [
+      [userCountRows],
+      [depositsTodayRows],
+      [withdrawalsTodayRows],
+      [betsTodayRows],
+      [pendingWithdrawalsRows],
+      [totalBalanceRows],
+      [recentBetsRows],
+    ] = await Promise.all([
+      // Total users
+      pool.query(
+        `SELECT COUNT(*) as count FROM users WHERE role = 'user'${userScopeClause}`,
+        userScopeParams
+      ),
+      // Total deposits today
+      pool.query(
+        `SELECT COUNT(*) as count, COALESCE(SUM(d.amount), 0) as total
+         FROM deposits d
+         JOIN users u ON d.user_id = u.id
+         WHERE ${currentDayFilter('d.created_at')} AND d.status = 'completed'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
+        userScopeParams
+      ),
+      // Total withdrawals today
+      pool.query(
+        `SELECT COUNT(*) as count, COALESCE(SUM(wr.amount), 0) as total
+         FROM withdraw_requests wr
+         JOIN users u ON wr.user_id = u.id
+         WHERE ${currentDayFilter('wr.created_at')} AND wr.status = 'approved'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
+        userScopeParams
+      ),
+      // Total bets today
+      pool.query(
+        `SELECT COUNT(*) as count, COALESCE(SUM(b.total_amount), 0) as total
+         FROM bets b
+         JOIN users u ON b.user_id = u.id
+         WHERE ${currentDayFilter('b.created_at')}${isModerator ? ' AND u.moderator_id = ?' : ''}`,
+        userScopeParams
+      ),
+      // Pending withdrawals
+      pool.query(
+        `SELECT COUNT(*) as count
+         FROM withdraw_requests wr
+         JOIN users u ON wr.user_id = u.id
+         WHERE wr.status = 'pending'${isModerator ? ' AND u.moderator_id = ?' : ''}`,
+        userScopeParams
+      ),
+      // Total wallet balance
+      pool.query(
+        `SELECT COALESCE(SUM(w.balance), 0) as total
+         FROM wallets w
+         JOIN users u ON w.user_id = u.id
+         WHERE u.role = 'user'${userScopeClause}`,
+        userScopeParams
+      ),
+      // Recent activity
+      pool.query(
+        `SELECT b.*, u.name as user_name, g.name as game_name
+         FROM bets b
+         JOIN users u ON b.user_id = u.id
+         JOIN games g ON b.game_id = g.id
+         WHERE 1 = 1${isModerator ? ' AND u.moderator_id = ?' : ''}
+         ORDER BY b.created_at DESC LIMIT 10`,
+        userScopeParams
+      ),
+    ]);
 
     res.json({
       stats: {
-        total_users: userCount[0].count,
-        deposits_today: { count: depositsToday[0].count, total: parseFloat(depositsToday[0].total) },
-        withdrawals_today: { count: withdrawalsToday[0].count, total: parseFloat(withdrawalsToday[0].total) },
-        bets_today: { count: betsToday[0].count, total: parseFloat(betsToday[0].total) },
-        pending_deposits: pendingDeposits[0].count,
-        pending_withdrawals: pendingWithdrawals[0].count,
-        total_wallet_balance: parseFloat(totalBalance[0].total),
+        total_users: userCountRows[0].count,
+        deposits_today: { count: depositsTodayRows[0].count, total: parseFloat(depositsTodayRows[0].total) },
+        withdrawals_today: { count: withdrawalsTodayRows[0].count, total: parseFloat(withdrawalsTodayRows[0].total) },
+        bets_today: { count: betsTodayRows[0].count, total: parseFloat(betsTodayRows[0].total) },
+        pending_deposits: 0,
+        pending_withdrawals: pendingWithdrawalsRows[0].count,
+        total_wallet_balance: parseFloat(totalBalanceRows[0].total),
       },
-      recent_bets: recentBets,
+      recent_bets: recentBetsRows,
     });
   } catch (error) {
     next(error);
@@ -103,13 +98,6 @@ exports.getBetAnalytics = async (req, res, next) => {
   try {
     const { game_id, type, from, to } = req.query;
     const isModerator = req.user.role === 'moderator';
-
-    if (isModerator) {
-      const [mod] = await pool.query('SELECT is_deleted FROM users WHERE id = ? LIMIT 1', [req.user.id]);
-      if (!mod.length || mod[0].is_deleted) {
-        return res.status(403).json({ error: 'Account deactivated.' });
-      }
-    }
 
     let query = `
       SELECT bn.number, SUM(bn.amount) as total_amount, COUNT(*) as bet_count
@@ -134,12 +122,12 @@ exports.getBetAnalytics = async (req, res, next) => {
       params.push(type);
     }
     if (from) {
-      query += ' AND b.created_at >= ?';
+      query += ' AND COALESCE(b.session_date, DATE(b.created_at)) >= ?';
       params.push(from);
     }
     if (to) {
-      query += ' AND b.created_at <= ?';
-      params.push(to + ' 23:59:59');
+      query += ' AND COALESCE(b.session_date, DATE(b.created_at)) <= ?';
+      params.push(to);
     }
 
     query += ' GROUP BY bn.number ORDER BY total_amount DESC';
@@ -194,13 +182,94 @@ exports.getRevenueAnalytics = async (req, res, next) => {
     `, [interval]);
 
     const [bets] = await pool.query(`
-      SELECT DATE_FORMAT(created_at, '%Y-%m-%d') as date, SUM(total_amount) as total_bet, SUM(win_amount) as total_win
+      SELECT DATE_FORMAT(COALESCE(session_date, DATE(created_at)), '%Y-%m-%d') as date,
+             SUM(total_amount) as total_bet,
+             SUM(win_amount) as total_win
       FROM bets
-      WHERE created_at >= DATE_SUB(${IST_NOW_SQL}, INTERVAL ? DAY)
-      GROUP BY DATE_FORMAT(created_at, '%Y-%m-%d') ORDER BY date
+      WHERE COALESCE(session_date, DATE(created_at)) >= DATE(DATE_SUB(${IST_NOW_SQL}, INTERVAL ? DAY))
+      GROUP BY DATE_FORMAT(COALESCE(session_date, DATE(created_at)), '%Y-%m-%d') ORDER BY date
     `, [interval]);
 
     res.json({ deposits, withdrawals, bets, period });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getGameAnalytics = async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const isModerator = req.user.role === 'moderator';
+    const params = [];
+
+    let userJoin = '';
+    let userFilter = '';
+    if (isModerator) {
+      userJoin = ' JOIN users u ON b.user_id = u.id';
+      userFilter = ' AND u.moderator_id = ?';
+      params.push(req.user.id);
+    }
+
+    if (from) params.push(from);
+    if (to) params.push(to);
+
+    const [rows] = await pool.query(
+      `SELECT g.id, g.name AS game_name,
+              COUNT(b.id)          AS total_bets,
+              SUM(b.total_amount)  AS total_staked,
+              SUM(b.win_amount)    AS total_won,
+              SUM(b.total_amount) - SUM(b.win_amount) AS gross_profit
+       FROM bets b
+       JOIN games g ON g.id = b.game_id
+       ${userJoin}
+       WHERE 1=1 ${userFilter}
+         ${from ? 'AND COALESCE(b.session_date, DATE(b.created_at)) >= ?' : ''}
+         ${to   ? 'AND COALESCE(b.session_date, DATE(b.created_at)) <= ?' : ''}
+       GROUP BY g.id, g.name
+       ORDER BY total_staked DESC`,
+      params
+    );
+
+    res.json({ games: rows });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getBetTypeAnalytics = async (req, res, next) => {
+  try {
+    const { from, to } = req.query;
+    const isModerator = req.user.role === 'moderator';
+    const params = [];
+
+    let userJoin = '';
+    let userFilter = '';
+    if (isModerator) {
+      userJoin = ' JOIN users u ON b.user_id = u.id';
+      userFilter = ' AND u.moderator_id = ?';
+      params.push(req.user.id);
+    }
+
+    if (from) params.push(from);
+    if (to) params.push(to);
+
+    const [rows] = await pool.query(
+      `SELECT b.type,
+              COUNT(b.id)          AS total_bets,
+              SUM(b.total_amount)  AS total_staked,
+              SUM(b.win_amount)    AS total_won,
+              SUM(b.total_amount) - SUM(b.win_amount) AS gross_profit
+       FROM bets b
+       ${userJoin}
+       WHERE 1=1 ${userFilter}
+         ${from ? 'AND COALESCE(b.session_date, DATE(b.created_at)) >= ?' : ''}
+         ${to   ? 'AND COALESCE(b.session_date, DATE(b.created_at)) <= ?' : ''}
+       GROUP BY b.type
+       ORDER BY total_staked DESC`,
+      params
+    );
+
+    res.json({ types: rows });
   } catch (error) {
     next(error);
   }

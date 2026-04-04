@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Header from '../components/Header'
 import { betAPI, gameAPI } from '../lib/api'
 import { formatBetType } from '../lib/formatters'
+import { getSocket, subscribeToGame, unsubscribeFromGame, disconnectSocket } from '../lib/socket'
 
 function parseTimeString(timeValue) {
   const parts = String(timeValue || '').split(':').map(Number)
@@ -141,6 +142,31 @@ function GamePageInner() {
     const timer = window.setInterval(tick, 1000)
     return () => window.clearInterval(timer)
   }, [gameInfo, serverOffsetMs])
+
+  // Real-time socket: subscribe to this game's room for live result/bet events
+  useEffect(() => {
+    if (!gameId) return
+    const socket = getSocket() // cookie handles auth
+    subscribeToGame(socket, gameId)
+
+    const handleResultDeclared = (data) => {
+      if (String(data?.gameId) !== String(gameId)) return
+      // Reload game info to show updated result and re-check betting window
+      gameAPI.getInfo(gameId).then((res) => {
+        if (res?.game) setGameInfo(res.game)
+        if (res?.server_now) setServerOffsetMs(new Date(res.server_now).getTime() - Date.now())
+      }).catch(() => {})
+    }
+
+    socket.on('result_declared', handleResultDeclared)
+
+    return () => {
+      socket.off('result_declared', handleResultDeclared)
+      unsubscribeFromGame(socket, gameId)
+      disconnectSocket()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameId])
 
   // Removed toggleFavorite function
 

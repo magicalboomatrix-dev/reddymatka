@@ -10,6 +10,7 @@ export default function Withdrawals() {
   const [loading, setLoading] = useState(true);
   const { toasts, success, error: toastError, dismiss } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
+  const [rejectModal, setRejectModal] = useState({ open: false, id: null, reason: '' });
 
   useEffect(() => { loadData(); }, [page, filter]);
 
@@ -44,11 +45,17 @@ export default function Withdrawals() {
   };
 
   const reject = async (id) => {
-    const reason = prompt('Rejection reason:');
-    if (!reason) return;
+    setRejectModal({ open: true, id, reason: '' });
+  };
+
+  const submitReject = async () => {
+    const { id, reason } = rejectModal;
+    if (!reason.trim()) return;
+    setRejectModal({ open: false, id: null, reason: '' });
     try {
       await api.put(`/withdraw/${id}/reject`, { reason });
       loadData();
+      success('Withdrawal rejected.');
     } catch (err) {
       toastError(err.response?.data?.error || 'Failed');
     }
@@ -58,6 +65,40 @@ export default function Withdrawals() {
     <div className="space-y-4">
       <ToastContainer toasts={toasts} dismiss={dismiss} />
       <ConfirmModal state={confirmState} onConfirm={handleConfirm} onCancel={handleCancel} />
+
+      {/* Rejection reason modal */}
+      {rejectModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white w-full max-w-sm mx-4 p-6 space-y-4">
+            <h3 className="text-base font-semibold text-gray-800">Reject Withdrawal</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+              <textarea
+                className="w-full border border-gray-300 px-3 py-2 text-sm resize-none"
+                rows={3}
+                placeholder="Enter rejection reason…"
+                value={rejectModal.reason}
+                onChange={(e) => setRejectModal((m) => ({ ...m, reason: e.target.value }))}
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setRejectModal({ open: false, id: null, reason: '' })}
+                className="px-4 py-2 text-sm border text-gray-600 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitReject}
+                disabled={!rejectModal.reason.trim()}
+                className="px-4 py-2 text-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                Reject
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex gap-2">
         {['pending', 'approved', 'rejected'].map((s) => (
           <button key={s} onClick={() => { setFilter(s); setPage(1); }}

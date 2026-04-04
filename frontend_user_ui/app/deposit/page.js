@@ -2,14 +2,36 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import QRCode from 'react-qr-code'
 import DepositWithdrawBtns from '../components/DepositWithdrawBtns'
-import { autoDepositAPI, depositAPI, userAPI } from '../lib/api'
+import { autoDepositAPI, userAPI } from '../lib/api'
+
+function getOrderStatusClasses(status) {
+  switch (status) {
+    case 'matched':
+      return 'bg-green-100 text-green-700'
+    case 'pending':
+      return 'bg-amber-100 text-amber-700'
+    case 'expired':
+    case 'cancelled':
+      return 'bg-red-100 text-red-700'
+    default:
+      return 'bg-gray-100 text-gray-700'
+  }
+}
+
+function getOrderStatusLabel(status) {
+  if (status === 'matched') return 'Credited'
+  if (status === 'pending') return 'Pending'
+  if (status === 'expired') return 'Expired'
+  if (status === 'cancelled') return 'Cancelled'
+  return status || 'Unknown'
+}
 
 const DepositPage = () => {
   const [amount, setAmount] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [history, setHistory] = useState([]);
+  const [orderHistory, setOrderHistory] = useState([]);
   const [depositGuidelines, setDepositGuidelines] = useState([]);
   const [depositLimits, setDepositLimits] = useState({ min: 100, max: 50000 });
 
@@ -19,16 +41,16 @@ const DepositPage = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const pollRef = useRef(null);
   const timerRef = useRef(null);
+  const pollAttemptsRef = useRef(0);
 
   const fetchHistory = async () => {
     try {
-      const res = await depositAPI.history({});
-      setHistory(res.deposits || []);
+      const res = await autoDepositAPI.getMyOrders({ page: 1, limit: 20 });
+      setOrderHistory(res.orders || []);
     } catch {}
   };
 
   useEffect(() => {
-    fetchHistory();
     userAPI.getUiConfig().then((res) => {
       setDepositGuidelines(res.deposit_guidelines || []);
       if (res.settings) {
@@ -39,11 +61,12 @@ const DepositPage = () => {
       }
     }).catch(() => setDepositGuidelines([]));
 
-    // Check for existing pending orders on mount
-    autoDepositAPI.getMyOrders({ status: 'pending', limit: 1 }).then((res) => {
+    // Single fetch for history + pending order check
+    autoDepositAPI.getMyOrders({ page: 1, limit: 20 }).then((res) => {
       const orders = res.orders || [];
-      if (orders.length > 0) {
-        const order = orders[0];
+      setOrderHistory(orders);
+      const order = orders.find((item) => item.status === 'pending');
+      if (order) {
         const expiresAt = new Date(order.expires_at).getTime();
         const remaining = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
         if (remaining > 0) {
@@ -90,11 +113,18 @@ const DepositPage = () => {
     return () => clearInterval(timerRef.current);
   }, [activeOrder]);
 
-  // Poll order status
+  // Poll order status (max 24 attempts = 2 minutes at 5 s intervals)
   const startPolling = useCallback((orderId) => {
     if (pollRef.current) clearInterval(pollRef.current);
+    pollAttemptsRef.current = 0;
 
     pollRef.current = setInterval(async () => {
+      pollAttemptsRef.current += 1;
+      // Stop after 24 attempts (~2 min) to avoid runaway polling
+      if (pollAttemptsRef.current >= 24) {
+        clearInterval(pollRef.current);
+        return;
+      }
       try {
         const res = await autoDepositAPI.getOrderStatus(orderId);
         const order = res.order;
@@ -170,7 +200,7 @@ const DepositPage = () => {
 
   return (
     <div>
-      <header className="sticky top-0 z-40 mx-auto flex w-full max-w-[430px] items-center bg-white px-4 py-3 shadow-sm">
+      <header className="sticky top-0 z-40 mx-auto flex w-full max-w-107.5 items-center bg-white px-4 py-3 shadow-sm">
         <a href="/home" className="mr-3 inline-flex"><img alt="back" src="/images/back-btn.png" className="h-5 w-5" /></a>
         <h3 className="flex-1 text-center text-sm font-semibold text-[#111]">Deposit</h3>
       </header>
@@ -178,7 +208,7 @@ const DepositPage = () => {
       <div className="bg-white pb-6">
         <DepositWithdrawBtns />
 
-        <div className="mx-auto w-full max-w-[430px]">
+        <div className="mx-auto w-full max-w-107.5">
           <div className="border border-[#d6b774] bg-white p-4 shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
 
             {error && <div className="mb-2 bg-[#ffe0e0] px-2 py-2 text-xs text-[#c00]">{error}</div>}
@@ -302,26 +332,28 @@ const DepositPage = () => {
             <table className="w-full border-collapse text-left text-xs text-[#111]">
               <thead>
                 <tr>
-                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">UTR</th>
-                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Amount</th>
+                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Order Ref</th>
+                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Paid</th>
+                  <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Credited</th>
                   <th className="border-b border-r border-[#ead8ab] bg-[#f7f0e3] px-3 py-2">Status</th>
                   <th className="border-b bg-[#f7f0e3] px-3 py-2">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {history.map((d, i) => (
-                  <tr key={d.id || i}>
-                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2 font-mono">{d.utr_number || '-'}</td>
-                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2">?{parseFloat(d.amount).toLocaleString('en-IN')}</td>
+                {orderHistory.map((order, i) => (
+                  <tr key={order.id || i}>
+                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2 font-mono">{order.order_ref || '-'}</td>
+                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2">₹{parseFloat(order.pay_amount || order.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="border-b border-r border-[#f0e3c6] px-3 py-2">₹{parseFloat(order.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className="border-b border-r border-[#f0e3c6] px-3 py-2">
-                      <span className="inline-block rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold text-green-700">
-                        {d.status === 'approved' ? 'Approved' : d.status}
+                      <span className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold ${getOrderStatusClasses(order.status)}`}>
+                        {getOrderStatusLabel(order.status)}
                       </span>
                     </td>
-                    <td className="border-b px-3 py-2">{d.created_at ? new Date(d.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
+                    <td className="border-b px-3 py-2">{order.created_at ? new Date(order.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>
                   </tr>
                 ))}
-                {history.length === 0 && <tr><td className="px-3 py-6 text-center" colSpan="4">No deposits yet</td></tr>}
+                {orderHistory.length === 0 && <tr><td className="px-3 py-6 text-center" colSpan="5">No deposit orders yet</td></tr>}
               </tbody>
             </table>
           </div>

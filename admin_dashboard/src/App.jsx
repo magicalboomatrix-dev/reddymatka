@@ -18,6 +18,29 @@ import Results from './pages/Results';
 import CustomAds from './pages/CustomAds';
 import AutoDeposits from './pages/AutoDeposits';
 import UpiManagement from './pages/UpiManagement';
+import SettlementMonitor from './pages/SettlementMonitor';
+import WalletAudit from './pages/WalletAudit';
+
+const APP_ROUTES = [
+  { index: true, element: <Dashboard /> },
+  { path: 'users', element: <Users /> },
+  { path: 'users/:id', element: <UserDetail /> },
+  { path: 'moderators', element: <Moderators /> },
+  { path: 'moderators/:id', element: <ModeratorDetail /> },
+  { path: 'deposits', element: <Deposits /> },
+  { path: 'auto-deposits', element: <AutoDeposits /> },
+  { path: 'upi-management', element: <UpiManagement /> },
+  { path: 'withdrawals', element: <Withdrawals /> },
+  { path: 'games', element: <Games /> },
+  { path: 'results', element: <Results /> },
+  { path: 'settings', element: <Settings /> },
+  { path: 'analytics', element: <Analytics /> },
+  { path: 'notifications', element: <Notifications /> },
+  { path: 'fraud-logs', element: <FraudLogs /> },
+  { path: 'custom-ads', element: <CustomAds /> },
+  { path: 'settlement-monitor', element: <SettlementMonitor /> },
+  { path: 'wallet-audit', element: <WalletAudit /> },
+];
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -33,23 +56,15 @@ function AppRoutes() {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
       <Route path="/" element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route index element={<Dashboard />} />
-        <Route path="users" element={<Users />} />
-        <Route path="users/:id" element={<UserDetail />} />
-        <Route path="moderators" element={<Moderators />} />
-        <Route path="moderators/:id" element={<ModeratorDetail />} />
-        <Route path="deposits" element={<Deposits />} />
-        <Route path="withdrawals" element={<Withdrawals />} />
-        <Route path="games" element={<Games />} />
-        <Route path="results" element={<Results />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="notifications" element={<Notifications />} />
-        <Route path="fraud-alerts" element={<FraudLogs />} />
-        <Route path="fraud-logs" element={<FraudLogs />} />
-        <Route path="custom-ads" element={<CustomAds />} />
-        <Route path="auto-deposits" element={<AutoDeposits />} />
-        <Route path="upi-management" element={<UpiManagement />} />
+        {APP_ROUTES.map((route) => (
+          <Route
+            key={route.path || 'index'}
+            index={route.index}
+            path={route.path}
+            element={route.element}
+          />
+        ))}
+        <Route path="fraud-alerts" element={<Navigate to="/fraud-logs" replace />} />
       </Route>
     </Routes>
   );

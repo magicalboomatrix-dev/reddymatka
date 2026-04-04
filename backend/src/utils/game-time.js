@@ -51,10 +51,10 @@ function isOvernightGame(game) {
 /**
  * For a given result_date, compute the absolute open and close datetimes.
  *
- * Normal game:   open & close on result_date itself.
- * Overnight game: open on result_date, close on result_date + 1 day.
+ * result_date is always the date the game *closes* on (DATE(close_time)).
  *
- * result_date is always the date the game *opened* on.
+ * Normal game:   open & close are both on result_date.
+ * Overnight game: close is on result_date, open is on result_date − 1 day.
  */
 function calculateGameDatetimes(game, resultDate) {
   const open = parseTime(game.open_time);
@@ -64,11 +64,12 @@ function calculateGameDatetimes(game, resultDate) {
   // resultDate can be a Date or "YYYY-MM-DD" string
   const base = typeof resultDate === 'string' ? new Date(`${resultDate}T00:00:00`) : new Date(resultDate);
 
-  const openDt = dateAtTime(base, open);
   const closeDt = dateAtTime(base, close);
+  const openDt = dateAtTime(base, open);
 
   if (overnight) {
-    closeDt.setDate(closeDt.getDate() + 1);
+    // Session opened the day before the closing date
+    openDt.setDate(openDt.getDate() - 1);
   }
 
   return { openDatetime: openDt, closeDatetime: closeDt, isOvernight: overnight };
@@ -77,10 +78,16 @@ function calculateGameDatetimes(game, resultDate) {
 /**
  * Compute the result_date for a game given "now" (IST).
  *
- * For normal games  → today (IST).
- * For overnight games:
- *   - if now >= open_time (evening)  → today (the game opened today)
- *   - if now <  open_time (early AM) → yesterday (the game opened yesterday)
+ * result_date = DATE(close_time) — the date the session CLOSES on.
+ *
+ * Normal game (close_time > open_time, same day):
+ *   result_date = today.
+ *
+ * Overnight game (close_time < open_time, spans midnight):
+ *   - Evening side: now >= open_time → session closes tomorrow
+ *     → result_date = tomorrow
+ *   - Early-morning side: now < open_time → session closes today
+ *     → result_date = today
  */
 function getResultDate(game, now = new Date()) {
   if (!isOvernightGame(game)) {
@@ -91,12 +98,13 @@ function getResultDate(game, now = new Date()) {
   const openToday = dateAtTime(now, open);
 
   if (now >= openToday) {
-    return formatDate(now);
+    // Evening side — the session will close tomorrow
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return formatDate(tomorrow);
   }
-  // Before open_time → game opened yesterday
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  return formatDate(yesterday);
+  // Early-morning side — the session closes today
+  return formatDate(now);
 }
 
 /**

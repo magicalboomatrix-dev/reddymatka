@@ -16,16 +16,11 @@ export function buildUploadUrl(fileName) {
 const api = axios.create({
   baseURL: API_BASE,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true, // send HttpOnly auth cookie automatically
 });
 
-// Add token to all requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('admin_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Authentication is handled exclusively via the HttpOnly cookie sent by
+// withCredentials:true above. No localStorage token read to avoid XSS exposure.
 
 // Handle 401 responses
 api.interceptors.response.use(

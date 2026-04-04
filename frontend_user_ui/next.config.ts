@@ -1,7 +1,36 @@
 import type { NextConfig } from "next";
 
+// Note: Content-Security-Policy is set per-request in middleware.ts
+// (nonce-based, production-safe, no unsafe-eval).
+// The headers below apply only to static security hardening that does not
+// require per-request nonces.
+
 const nextConfig: NextConfig = {
-  /* config options here */
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'X-Content-Type-Options',
+            value: 'nosniff',
+          },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

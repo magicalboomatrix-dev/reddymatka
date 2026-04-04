@@ -1,5 +1,6 @@
 const pool = require('../config/database');
 const { clampPagination, escapeLike } = require('../utils/pagination');
+const { invalidateUserCache } = require('../middleware/auth.middleware');
 
 const LARGE_NEW_USER_DEPOSIT_THRESHOLD = 5000;
 const LARGE_NEW_USER_DEPOSIT_MAX_AGE_DAYS = 3;
@@ -79,6 +80,9 @@ exports.blockUser = async (req, res, next) => {
     if (result.affectedRows === 0) {
       return res.status(404).json({ error: 'User not found.' });
     }
+
+    // Evict cached user row so the new block state is seen on next request
+    await invalidateUserCache(id);
 
     res.json({ message: is_blocked ? 'User blocked.' : 'User unblocked.' });
   } catch (error) {
@@ -385,7 +389,7 @@ exports.getFraudLogs = async (req, res, next) => {
 
 exports.getFraudAlerts = async (req, res, next) => {
   try {
-    const [duplicateRefs, duplicatePayers, largeNewUserDeposits] = await Promise.all([
+    const [duplicateRefs, duplicatePayers, largeNewUserDeposits, aiAlerts] = await Promise.all([
       pool.query(`
         SELECT COUNT(*) AS attempts_today
         FROM auto_deposit_logs
@@ -413,6 +417,16 @@ exports.getFraudAlerts = async (req, res, next) => {
         ORDER BY d.amount DESC, d.created_at DESC
         LIMIT 20
       `, [LARGE_NEW_USER_DEPOSIT_THRESHOLD, LARGE_NEW_USER_DEPOSIT_MAX_AGE_DAYS]),
+      pool.query(`
+        SELECT fa.id, fa.user_id, fa.alert_type, fa.severity, fa.details,
+               fa.is_resolved, fa.created_at,
+               u.name AS user_name, u.phone AS user_phone
+        FROM fraud_alerts fa
+        JOIN users u ON u.id = fa.user_id
+        WHERE fa.is_resolved = 0
+        ORDER BY fa.created_at DESC
+        LIMIT 50
+      `),
     ]);
 
     res.json({
@@ -420,9 +434,11 @@ exports.getFraudAlerts = async (req, res, next) => {
         fraud_attempts_today: duplicateRefs[0][0]?.attempts_today || 0,
         suspicious_payer_count: duplicatePayers[0].length,
         large_new_user_deposit_count: largeNewUserDeposits[0].length,
+        ai_alert_count: aiAlerts[0].length,
       },
       suspicious_payers: duplicatePayers[0],
       large_new_user_deposits: largeNewUserDeposits[0],
+      ai_alerts: aiAlerts[0],
     });
   } catch (error) {
     next(error);

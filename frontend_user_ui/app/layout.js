@@ -1,3 +1,4 @@
+import { headers } from 'next/headers';
 import Footer from "./components/Footer";
 import AuthGate from "./components/AuthGate";
 import { AuthProvider } from "./lib/AuthContext";
@@ -31,7 +32,12 @@ export const viewport = {
   themeColor: "#111111",
 };
 
-export default function RootLayout({ children }) {
+export default async function RootLayout({ children }) {
+  // Read the per-request nonce injected by middleware.ts.
+  // Next.js uses this nonce automatically for its own hydration script tags,
+  // satisfying the nonce-based script-src CSP in production.
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <html lang="en">
       <head>
@@ -42,6 +48,7 @@ export default function RootLayout({ children }) {
 
       <body
         className={`${exo2.variable} ${monaSans.variable} flex min-h-screen justify-center bg-[#eef1f5] text-[#171717] antialiased`}
+        {...(nonce ? { 'data-nonce': nonce } : {})}
       >
         <AuthProvider>
           <div className="relative flex w-full max-w-[430px] flex-col overflow-x-hidden bg-white">

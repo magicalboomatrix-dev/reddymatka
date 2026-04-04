@@ -2,6 +2,7 @@ const pool = require('../config/database');
 const { settleBetsForGame } = require('./settle-bets');
 const { canSettleGame } = require('./game-time');
 const logger = require('./logger');
+const eventBus = require('./event-bus');
 
 const MAX_ATTEMPTS = 3;
 const STALE_PROCESSING_MINUTES = 5;
@@ -36,6 +37,8 @@ async function enqueueSettlement(conn, { gameResultId, gameId, resultNumber, res
  */
 async function processQueue() {
   const conn = await pool.getConnection();
+  // Hoisted so the catch block can reference it without a fragile MAX(id) query
+  let queueId = null;
   try {
     // ── Step 1: Recover stale processing rows ──
     await conn.query(
@@ -68,6 +71,7 @@ async function processQueue() {
     }
 
     const job = jobs[0];
+    queueId = job.queue_id;
 
     // Check if game close time has passed (safe to settle)
     const now = new Date();
@@ -105,7 +109,7 @@ async function processQueue() {
     }
 
     const resultStr = job.result_number.toString().padStart(2, '0');
-    const count = await settleBetsForGame(conn, job.game_id, resultStr, job.game_result_id);
+    const count = await settleBetsForGame(conn, job.game_id, resultStr, job.game_result_id, job, job.result_date);
 
     // Mark settled
     await conn.query('UPDATE game_results SET is_settled = 1 WHERE id = ?', [job.game_result_id]);
@@ -116,26 +120,37 @@ async function processQueue() {
 
     await conn.commit();
 
+    // Emit outside the transaction — purely informational, no rollback risk
+    if (count > 0) {
+      eventBus.emit('bet_settled', {
+        gameId: job.game_id,
+        settledCount: count,
+        resultDate: job.result_date,
+      });
+    }
+
     if (count > 0) {
       logger.info('settle-worker', `Settled ${count} bets`, { queueId: job.queue_id, gameId: job.game_id, gameName: job.game_name, resultDate: job.result_date });
     }
   } catch (err) {
     try { await conn.rollback(); } catch (_) { /* ignore rollback errors */ }
 
-    // Try to mark the job as failed
-    try {
-      const [failInfo] = await pool.query(
-        'SELECT id, attempts FROM settlement_queue WHERE id = (SELECT MAX(id) FROM settlement_queue WHERE status = ?)',
-        ['processing']
-      );
-      if (failInfo.length > 0) {
-        const newStatus = failInfo[0].attempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
-        await pool.query(
-          `UPDATE settlement_queue SET status = ?, error_message = ?, started_at = NULL WHERE id = ?`,
-          [newStatus, err.message.slice(0, 2000), failInfo[0].id]
+    // Try to mark the job as failed (use hoisted queueId — avoids MAX(id) race)
+    if (queueId !== null) {
+      try {
+        const [rows] = await pool.query(
+          'SELECT attempts FROM settlement_queue WHERE id = ? LIMIT 1',
+          [queueId]
         );
-      }
-    } catch (_) { /* best-effort */ }
+        if (rows.length > 0) {
+          const newStatus = rows[0].attempts >= MAX_ATTEMPTS ? 'failed' : 'pending';
+          await pool.query(
+            `UPDATE settlement_queue SET status = ?, error_message = ?, started_at = NULL WHERE id = ?`,
+            [newStatus, err.message.slice(0, 2000), queueId]
+          );
+        }
+      } catch (_) { /* best-effort */ }
+    }
 
     logger.error('settle-worker', 'Settlement error', err);
   } finally {

@@ -5,5 +5,4 @@ const IST_TIME_SQL = `TIME(${IST_NOW_SQL})`;
 module.exports = {
   IST_NOW_SQL,
   IST_DATE_SQL,
-  IST_TIME_SQL,
 };

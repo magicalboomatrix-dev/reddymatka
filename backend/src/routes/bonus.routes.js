@@ -6,5 +6,6 @@ const { authenticate } = require('../middleware/auth.middleware');
 router.get('/history', authenticate, bonusController.getBonusHistory);
 router.get('/referrals', authenticate, bonusController.getReferrals);
 router.get('/rules', bonusController.getBonusRules);
+router.post('/claim-daily', authenticate, bonusController.claimDailyBonus);
 
 module.exports = router;

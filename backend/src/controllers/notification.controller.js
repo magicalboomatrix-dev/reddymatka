@@ -1,8 +1,16 @@
 const pool = require('../config/database');
 
+function maskName(name) {
+  const safe = String(name || '').trim();
+  if (!safe) return 'User****';
+  if (safe.length <= 2) return `${safe.charAt(0)}****`;
+  return `${safe.slice(0, Math.min(4, safe.length))}****`;
+}
+
 exports.getRecentNotifications = async (req, res, next) => {
   try {
-    // Get recent win notifications (for public ticker)
+    // Get recent win notifications (for public ticker).
+    // User names are masked before sending to protect privacy.
     const [notifications] = await pool.query(`
       SELECT n.message, n.created_at, u.name as user_name
       FROM notifications n
@@ -10,7 +18,12 @@ exports.getRecentNotifications = async (req, res, next) => {
       WHERE n.type = 'win'
       ORDER BY n.created_at DESC LIMIT 20
     `);
-    res.json({ notifications });
+    res.json({
+      notifications: notifications.map((n) => ({
+        ...n,
+        user_name: maskName(n.user_name),
+      })),
+    });
   } catch (error) {
     next(error);
   }

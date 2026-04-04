@@ -8,13 +8,13 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('admin_token');
+    // Token is no longer stored in localStorage (HttpOnly cookie handles auth).
+    // Only the user object is persisted for UI display.
     const savedUser = localStorage.getItem('admin_user');
-    if (token && savedUser) {
+    if (savedUser) {
       try {
         setUser(JSON.parse(savedUser));
       } catch {
-        localStorage.removeItem('admin_token');
         localStorage.removeItem('admin_user');
       }
     }
@@ -23,14 +23,14 @@ export function AuthProvider({ children }) {
 
   const login = async (phone, password) => {
     const res = await api.post('/auth/admin-login', { phone, password });
-    localStorage.setItem('admin_token', res.data.token);
+    // Token is stored in HttpOnly cookie by the server — only user info saved locally
     localStorage.setItem('admin_user', JSON.stringify(res.data.user));
     setUser(res.data.user);
     return res.data;
   };
 
-  const logout = () => {
-    localStorage.removeItem('admin_token');
+  const logout = async () => {
+    try { await api.post('/auth/logout'); } catch { /* no-op */ }
     localStorage.removeItem('admin_user');
     setUser(null);
   };

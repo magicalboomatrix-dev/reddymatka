@@ -9,31 +9,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const savedToken = localStorage.getItem('token');
+    // Token is no longer stored in localStorage (HttpOnly cookie handles auth).
+    // Only the user object is persisted for UI display.
     const savedUser = localStorage.getItem('user');
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      try { setUser(JSON.parse(savedUser)); } catch { /* ignore */ }
+    if (savedUser) {
+      try { setUser(JSON.parse(savedUser)); } catch { localStorage.removeItem('user'); }
     }
     setLoading(false);
   }, []);
 
   function login(tokenVal, userVal) {
-    localStorage.setItem('token', tokenVal);
+    // Keep token in React state only (NOT localStorage) to avoid XSS exposure
     localStorage.setItem('user', JSON.stringify(userVal));
     setToken(tokenVal);
     setUser(userVal);
   }
 
-  function logout() {
-    localStorage.removeItem('token');
+  async function logout() {
+    try {
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch { /* no-op */ }
     localStorage.removeItem('user');
     setToken(null);
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, loading, login, logout, isLoggedIn: !!token }}>
+    <AuthContext.Provider value={{ user, token, loading, login, logout, isLoggedIn: !!user }}>
       {children}
     </AuthContext.Provider>
   );

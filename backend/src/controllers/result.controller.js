@@ -2,6 +2,8 @@ const pool = require('../config/database');
 const XLSX = require('xlsx');
 const { isResultVisible, getResultDate, resolveGameWindow } = require('../utils/game-time');
 const { escapeLike } = require('../utils/pagination');
+const redis = require('../services/redis.service');
+const eventBus = require('../utils/event-bus');
 
 function normalizeResultNumber(value) {
   const trimmed = String(value ?? '').trim();
@@ -427,9 +429,27 @@ exports.upsertResult = async (req, res, next) => {
       [gameId, result_date]
     );
 
+    redis.delPattern('cache:/api/results*').catch(() => {});
+    redis.delPattern('cache:/api/games*').catch(() => {});
+
+    // Enqueue settlement job so bets are settled regardless of which admin path declared the result.
+    // INSERT IGNORE is idempotent — if a job already exists for this game_result_id it is silently skipped.
+    const resultId = savedRows[0]?.id || null;
+    if (resultId) {
+      const resultStr = resultNumber.padStart(2, '0');
+      await pool.query(
+        `INSERT IGNORE INTO settlement_queue
+           (game_result_id, game_id, result_number, result_date, status)
+         VALUES (?, ?, ?, ?, 'pending')`,
+        [resultId, gameId, resultStr, result_date]
+      );
+      // Notify real-time subscribers (fire-and-forget)
+      eventBus.emit('result_declared', { gameId, resultId, resultDate: result_date, resultNumber: resultStr });
+    }
+
     res.json({
       message: 'Result saved successfully.',
-      resultId: savedRows[0]?.id || null,
+      resultId,
       game_name: game.name,
       result_number: resultNumber,
       result_date,
@@ -470,6 +490,8 @@ exports.updateResultById = async (req, res, next) => {
       [gameId, resultNumber, result_date, effectiveDeclaredAt, resultId]
     );
 
+    redis.delPattern('cache:/api/results*').catch(() => {});
+
     res.json({
       message: 'Result updated successfully.',
       resultId,
@@ -502,6 +524,7 @@ exports.deleteResultById = async (req, res, next) => {
     }
 
     await pool.query('DELETE FROM game_results WHERE id = ?', [resultId]);
+    redis.delPattern('cache:/api/results*').catch(() => {});
     res.json({ message: 'Result deleted successfully.', resultId });
   } catch (error) {
     next(error);
@@ -539,6 +562,10 @@ exports.bulkDeleteResults = async (req, res, next) => {
     if (deletableIds.length > 0) {
       const deletePlaceholders = deletableIds.map(() => '?').join(', ');
       await pool.query(`DELETE FROM game_results WHERE id IN (${deletePlaceholders})`, deletableIds);
+    }
+
+    if (deletableIds.length > 0) {
+      redis.delPattern('cache:/api/results*').catch(() => {});
     }
 
     res.json({

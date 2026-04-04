@@ -8,7 +8,11 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'REDDYMATKA',
   waitForConnections: true,
   connectionLimit: 50,
-  queueLimit: 0,
+  // Cap the internal wait queue at 100 requests.  When the pool is fully
+  // saturated and 100 requests are already queued, new requests fail fast
+  // with a "pool queue limit reached" error instead of piling up silently
+  // and causing cascading latency.
+  queueLimit: 100,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
   timezone: '+05:30',

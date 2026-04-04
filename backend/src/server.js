@@ -1,5 +1,6 @@
 require('dotenv').config();
 process.env.TZ = 'Asia/Kolkata';
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -8,7 +9,6 @@ const rateLimit = require('express-rate-limit');
 
 const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
-const bankAccountRoutes = require('./routes/bank-account.routes');
 const walletRoutes = require('./routes/wallet.routes');
 const gameRoutes = require('./routes/game.routes');
 const betRoutes = require('./routes/bet.routes');
@@ -24,13 +24,53 @@ const notificationRoutes = require('./routes/notification.routes');
 const customAdsRoutes = require('./routes/home-banner.routes');
 const telegramRoutes = require('./routes/telegram.routes');
 const autoDepositRoutes = require('./routes/auto-deposit.routes');
+const settlementMonitorRoutes = require('./routes/settlement-monitor.routes');
+const walletAuditRoutes = require('./routes/wallet-audit.routes');
 
 const { errorHandler } = require('./middleware/error.middleware');
-const { startAutoSettle } = require('./utils/auto-settle');
 const { expirePendingOrders } = require('./services/auto-deposit-matcher');
+// Settlement worker runs as a SEPARATE process (src/worker.js).
+// Do NOT import or start auto-settle here — it causes duplicate processing
+// when multiple HTTP server instances are deployed.
+const { initSocket } = require('./services/socket.service');
+const redis = require('./services/redis.service');
+const pool = require('./config/database');
 const logger = require('./utils/logger');
 
 const app = express();
+const PENDING_ORDER_EXPIRY_INTERVAL_MS = 60_000;
+
+const routeRegistrations = [
+  ['/api/auth', authRoutes],
+  ['/api/users', userRoutes],
+  ['/api/wallet', walletRoutes],
+  ['/api/games', gameRoutes],
+  ['/api/bets', betRoutes],
+  ['/api/deposits', depositRoutes],
+  ['/api/withdraw', withdrawRoutes],
+  ['/api/bonus', bonusRoutes],
+  ['/api/results', resultRoutes],
+  ['/api/analytics', analyticsRoutes],
+  ['/api/moderators', moderatorRoutes],
+  ['/api/moderator', moderatorSelfRoutes],
+  ['/api/admin', adminRoutes],
+  ['/api/notifications', notificationRoutes],
+  ['/api/custom-ads', customAdsRoutes],
+  ['/api/telegram', telegramRoutes],
+  ['/api/auto-deposit', autoDepositRoutes],
+  ['/api/settlement-monitor', settlementMonitorRoutes],
+  ['/api/wallet-audit', walletAuditRoutes],
+];
+
+function createRateLimiter({ windowMs, max, message }) {
+  return rateLimit({
+    windowMs,
+    max,
+    standardHeaders: true,
+    legacyHeaders: false,
+    ...(message ? { message } : {}),
+  });
+}
 
 function getOriginVariants(origin) {
   if (!origin) {
@@ -85,20 +125,16 @@ app.use(cors({
 }));
 
 // Rate limiting
-const authLimiter = rateLimit({
+const authLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  standardHeaders: true,
-  legacyHeaders: false,
 });
 app.use('/api/auth', authLimiter);
 
 // Stricter rate limits for financial endpoints (per IP)
-const financialLimiter = rateLimit({
+const financialLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
   max: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
   message: { error: 'Too many requests. Please try again later.' },
 });
 app.use('/api/withdraw', financialLimiter);
@@ -117,37 +153,44 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
 }));
 
 // Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api/bank-accounts', bankAccountRoutes);
-app.use('/api/wallet', walletRoutes);
-app.use('/api/games', gameRoutes);
-app.use('/api/bets', betRoutes);
-app.use('/api/deposits', depositRoutes);
-app.use('/api/withdraw', withdrawRoutes);
-app.use('/api/bonus', bonusRoutes);
-app.use('/api/results', resultRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/moderators', moderatorRoutes);
-app.use('/api/moderator', moderatorSelfRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/custom-ads', customAdsRoutes);
-app.use('/api/telegram', telegramRoutes);
-app.use('/api/auto-deposit', autoDepositRoutes);
+routeRegistrations.forEach(([routePath, routeHandler]) => {
+  app.use(routePath, routeHandler);
+});
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check — probes MySQL and Redis so load balancers and uptime monitors
+// receive a real signal instead of a static 200.
+app.get('/api/health', async (req, res) => {
+  const health = {
+    status: 'ok',
+    database: 'ok',
+    redis: redis.isConnected() ? 'ok' : 'degraded',
+    timestamp: new Date().toISOString(),
+  };
+
+  let httpStatus = 200;
+
+  try {
+    const conn = await pool.getConnection();
+    await conn.query('SELECT 1');
+    conn.release();
+  } catch {
+    health.database = 'error';
+    health.status = 'degraded';
+    httpStatus = 500;
+  }
+
+  res.status(httpStatus).json(health);
 });
 
 // Error handler
 app.use(errorHandler);
 
 const PORT = process.env.PORT;
-app.listen(PORT, () => {
+const httpServer = http.createServer(app);
+initSocket(httpServer);
+redis.init();
+httpServer.listen(PORT, () => {
   logger.info('server', `Server running on port ${PORT}`);
-  startAutoSettle();
 
   // Expire stale deposit orders every 60 seconds
   setInterval(async () => {
@@ -159,7 +202,7 @@ app.listen(PORT, () => {
     } catch (err) {
       logger.error('auto-deposit', 'Order expiry error', err);
     }
-  }, 60_000);
+  }, PENDING_ORDER_EXPIRY_INTERVAL_MS);
 });
 
-module.exports = app;
+module.exports = { app, httpServer };

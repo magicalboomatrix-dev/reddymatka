@@ -10,6 +10,18 @@ const MPIN_BLOCK_MINUTES = 30;
 const MAX_ADMIN_LOGIN_ATTEMPTS = 5;
 const ADMIN_LOGIN_BLOCK_MINUTES = 30;
 
+// Set an HttpOnly auth cookie on the response (avoids XSS token theft)
+function setAuthCookie(res, token) {
+  const isProd = process.env.NODE_ENV === 'production';
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: isProd ? 'None' : 'Lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+    path: '/',
+  });
+}
+
 function generateReferralCode() {
   return 'REDDYMATKA' + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
@@ -85,12 +97,13 @@ exports.sendOTP = async (req, res, next) => {
     await pool.query('UPDATE otps SET is_used = 1 WHERE phone IN (?) AND is_used = 0', [phoneCandidates]);
 
     const otp = generateOTP();
+    const otpHash = await bcrypt.hash(otp, 8);
     const otpExpiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES) || 5;
     const expiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
 
     const [insertResult] = await pool.query(
       'INSERT INTO otps (phone, purpose, otp, expires_at) VALUES (?, ?, ?, ?)',
-      [otpPhone, purpose, otp, expiresAt]
+      [otpPhone, purpose, otpHash, expiresAt]
     );
 
     try {
@@ -119,11 +132,16 @@ exports.verifyOTP = async (req, res, next) => {
     }
 
     const [otpRecords] = await pool.query(
-      `SELECT * FROM otps WHERE phone IN (?) AND purpose = ? AND otp = ? AND is_used = 0 AND expires_at > ${IST_NOW_SQL} ORDER BY id DESC LIMIT 1`,
-      [phoneCandidates, purpose, otp]
+      `SELECT * FROM otps WHERE phone IN (?) AND purpose = ? AND is_used = 0 AND expires_at > ${IST_NOW_SQL} ORDER BY id DESC LIMIT 1`,
+      [phoneCandidates, purpose]
     );
 
     if (otpRecords.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired OTP.' });
+    }
+
+    const isValidOtp = await bcrypt.compare(otp, otpRecords[0].otp);
+    if (!isValidOtp) {
       return res.status(400).json({ error: 'Invalid or expired OTP.' });
     }
 
@@ -259,6 +277,7 @@ exports.completeProfile = async (req, res, next) => {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
 
+    setAuthCookie(res, jwtToken);
     res.status(201).json({
       message: 'Profile created successfully.',
       token: jwtToken,
@@ -413,6 +432,7 @@ exports.loginMpin = async (req, res, next) => {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
 
+    setAuthCookie(res, token);
     res.json({
       message: 'Login successful.',
       token,
@@ -475,8 +495,14 @@ exports.adminLogin = async (req, res, next) => {
     });
 
     const { password: _, failed_login_attempts: _a, login_blocked_until: _b, ...userWithoutPassword } = user;
+    setAuthCookie(res, token);
     res.json({ message: 'Login successful.', token, user: userWithoutPassword });
   } catch (error) {
     next(error);
   }
+};
+
+exports.logout = (req, res) => {
+  res.clearCookie('token', { path: '/' });
+  res.json({ message: 'Logged out.' });
 };

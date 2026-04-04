@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Header from "../components/Header";
 import { betAPI, gameAPI } from "../lib/api";
 import { formatBetType } from "../lib/formatters";
+import { getSocket } from "../lib/socket";
 
 const STATUS_OPTIONS = [
   { value: "", label: "All Status" },
@@ -29,6 +30,7 @@ function getStatusClasses(status) {
 export default function MyBetsPage() {
   const [games, setGames] = useState([]);
   const [bets, setBets] = useState([]);
+  const [apiSummary, setApiSummary] = useState(null);
   const [filters, setFilters] = useState({
     game_id: "",
     status: "",
@@ -45,6 +47,15 @@ export default function MyBetsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [quickFilter, setQuickFilter] = useState("all");
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Refresh bets automatically when a bet settles
+  useEffect(() => {
+    const sock = getSocket();
+    const handleBetSettled = () => setRefreshKey((k) => k + 1);
+    sock.on('bet_settled', handleBetSettled);
+    return () => { sock.off('bet_settled', handleBetSettled); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +101,7 @@ export default function MyBetsPage() {
         }
 
         setBets(Array.isArray(response.bets) ? response.bets : []);
+        setApiSummary(response.summary || null);
         setPagination((current) => ({
           ...current,
           total: response.pagination?.total || 0,
@@ -111,9 +123,16 @@ export default function MyBetsPage() {
     return () => {
       cancelled = true;
     };
-  }, [filters, pagination.page, pagination.limit]);
+  }, [filters, pagination.page, pagination.limit, refreshKey]);
 
   const summary = useMemo(() => {
+    if (apiSummary) {
+      return {
+        totalBets: apiSummary.totalBets,
+        totalStake: apiSummary.totalStake,
+        totalWin: apiSummary.totalWin,
+      };
+    }
     return bets.reduce(
       (accumulator, bet) => {
         accumulator.totalStake += Number(bet.total_amount || 0);
@@ -127,7 +146,7 @@ export default function MyBetsPage() {
         totalBets: 0,
       },
     );
-  }, [bets]);
+  }, [bets, apiSummary]);
 
   const handleFilterChange = (field, value) => {
     setPagination((current) => ({ ...current, page: 1 }));
@@ -403,10 +422,12 @@ export default function MyBetsPage() {
                     </div>
                     <div className="bg-[#f7f0e3] flex flex-col justify-center items-center p-2">
                       <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-[#7a6a4b]">
-                        Placed
+                        Session
                       </div>
                       <div className="mt-1 text-xs font-semibold text-[#111]">
-                        {new Date(bet.created_at).toLocaleDateString("en-IN")}
+                        {bet.session_date
+                          ? new Date(bet.session_date + 'T00:00:00').toLocaleDateString('en-IN')
+                          : new Date(bet.created_at).toLocaleDateString("en-IN")}
                       </div>
                     </div>
                     <div className="bg-[#f7f0e3] flex flex-col justify-center items-center p-2">

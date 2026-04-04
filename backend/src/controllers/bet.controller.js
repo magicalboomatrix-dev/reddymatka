@@ -1,7 +1,8 @@
 const pool = require('../config/database');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
-const { canPlaceBet } = require('../utils/game-time');
+const { canPlaceBet, getResultDate } = require('../utils/game-time');
 const { clampPagination, escapeLike } = require('../utils/pagination');
+const fraudService = require('../services/fraud.service');
 
 // Generate crossing combinations: digits A,B → "AB" and "BA" (if different)
 function generateCrossingNumbers(digit1, digit2) {
@@ -81,7 +82,10 @@ exports.placeBet = async (req, res, next) => {
     await conn.beginTransaction();
 
     // Check game exists and is active
-    const [games] = await conn.query('SELECT * FROM games WHERE id = ? AND is_active = 1', [game_id]);
+    const [games] = await conn.query(
+      'SELECT id, open_time, close_time, is_overnight, is_active FROM games WHERE id = ? AND is_active = 1',
+      [game_id]
+    );
     if (games.length === 0) {
       await conn.rollback();
       return res.status(404).json({ error: 'Game not found or inactive.' });
@@ -90,6 +94,10 @@ exports.placeBet = async (req, res, next) => {
     const game = games[0];
 
     const now = new Date();
+
+    // Compute session_date server-side: DATE(close_time) for the current session.
+    // Never taken from the client — always derived from game timing.
+    const session_date = getResultDate(game, now);
 
     // Check time-based betting constraints using the game-time utility
     const [settings] = await conn.query(
@@ -136,19 +144,22 @@ exports.placeBet = async (req, res, next) => {
 
     // Create bet
     const [betResult] = await conn.query(
-      'INSERT INTO bets (user_id, game_id, type, total_amount) VALUES (?, ?, ?, ?)',
-      [req.user.id, game_id, type, totalAmount]
+      'INSERT INTO bets (user_id, game_id, type, total_amount, session_date) VALUES (?, ?, ?, ?, ?)',
+      [req.user.id, game_id, type, totalAmount, session_date]
     );
 
     const betId = betResult.insertId;
 
-    // Insert bet numbers
-    for (const item of betNumbers) {
-      await conn.query(
-        'INSERT INTO bet_numbers (bet_id, number, amount) VALUES (?, ?, ?)',
-        [betId, String(item.number).padStart(type === 'jodi' || type === 'crossing' ? 2 : 1, '0'), parseFloat(item.amount)]
-      );
-    }
+    // Bulk-insert all bet numbers in a single round-trip (was N sequential inserts).
+    const betNumberRows = betNumbers.map((item) => [
+      betId,
+      String(item.number).padStart(type === 'jodi' || type === 'crossing' ? 2 : 1, '0'),
+      parseFloat(item.amount),
+    ]);
+    await conn.query(
+      'INSERT INTO bet_numbers (bet_id, number, amount) VALUES ?',
+      [betNumberRows]
+    );
 
     const newBalance = await recordWalletTransaction(conn, {
       userId: req.user.id,
@@ -160,6 +171,9 @@ exports.placeBet = async (req, res, next) => {
     });
 
     await conn.commit();
+
+    // Fire-and-forget fraud check — runs outside transaction, never blocks response
+    fraudService.runChecks(req.user.id, totalAmount).catch(() => {});
 
     res.status(201).json({
       message: 'Bet placed successfully.',
@@ -196,11 +210,11 @@ exports.getUserBets = async (req, res, next) => {
       params.push(status);
     }
     if (from_date) {
-      query += ' AND DATE(b.created_at) >= ?';
+      query += ' AND COALESCE(b.session_date, DATE(b.created_at)) >= ?';
       params.push(from_date);
     }
     if (to_date) {
-      query += ' AND DATE(b.created_at) <= ?';
+      query += ' AND COALESCE(b.session_date, DATE(b.created_at)) <= ?';
       params.push(to_date);
     }
     if (search) {
@@ -221,7 +235,11 @@ exports.getUserBets = async (req, res, next) => {
     }
 
     const countQuery = `SELECT COUNT(*) as total FROM (${query}) as countTable`;
-    const [countResult] = await pool.query(countQuery, params);
+    const summaryQuery = `SELECT COUNT(*) as totalBets, COALESCE(SUM(total_amount),0) as totalStake, COALESCE(SUM(win_amount),0) as totalWin FROM (${query}) as summaryTable`;
+    const [countResult, summaryResult] = await Promise.all([
+      pool.query(countQuery, params),
+      pool.query(summaryQuery, params),
+    ]);
 
     query += ' ORDER BY b.created_at DESC LIMIT ? OFFSET ?';
     params.push(limit, offset);
@@ -247,11 +265,16 @@ exports.getUserBets = async (req, res, next) => {
 
     res.json({
       bets,
+      summary: {
+        totalBets: Number(summaryResult[0][0].totalBets),
+        totalStake: Number(summaryResult[0][0].totalStake),
+        totalWin: Number(summaryResult[0][0].totalWin),
+      },
       pagination: {
         page,
         limit,
-        total: countResult[0].total,
-        totalPages: Math.ceil(countResult[0].total / limit),
+        total: countResult[0][0].total,
+        totalPages: Math.ceil(countResult[0][0].total / limit),
       }
     });
   } catch (error) {

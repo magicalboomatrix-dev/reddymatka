@@ -6,6 +6,7 @@ import SkeletonBlock from '../components/SkeletonBlock';
 import { betAPI, userAPI, walletAPI } from '../lib/api';
 import { formatEnumLabel, formatStatusLabel } from '../lib/formatters';
 import { useEffect, useState } from 'react';
+import { getSocket, disconnectSocket } from '../lib/socket';
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
@@ -143,7 +144,7 @@ export default function WalletPage() {
         setLoading(true);
         const [walletResponse, betsResponse] = await Promise.all([
           walletAPI.getInfo(),
-          betAPI.history({ from_date: todayStr, to_date: todayStr, page: 1, limit: 200 }),
+          betAPI.myBets({ from_date: todayStr, to_date: todayStr, page: 1, limit: 200 }),
         ]);
 
         if (!cancelled) {
@@ -176,6 +177,26 @@ export default function WalletPage() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Real-time: update balance when wallet_updated is received
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    if (!token) return;
+
+    const socket = getSocket(token);
+
+    const handleWalletUpdated = ({ balance }) => {
+      setWallet((prev) => (prev ? { ...prev, balance } : { balance }));
+    };
+
+    socket.on('wallet_updated', handleWalletUpdated);
+
+    return () => {
+      socket.off('wallet_updated', handleWalletUpdated);
+      disconnectSocket();
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const withdrawableAmount = Number(wallet?.available_withdrawal ?? wallet?.balance ?? 0);

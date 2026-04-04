@@ -1,3 +1,5 @@
+const eventBus = require('./event-bus');
+
 async function ensureWalletRow(conn, userId) {
   await conn.query(
     'INSERT IGNORE INTO wallets (user_id, balance, bonus_balance) VALUES (?, 0.00, 0.00)',
@@ -26,7 +28,8 @@ async function recordWalletTransaction(conn, {
   remark = null,
 }) {
   // Idempotency guard: if this reference was already recorded, return current balance.
-  // The UNIQUE(reference_type, reference_id) constraint prevents double-credits on retry.
+  // Backed by a DB-level UNIQUE KEY uq_wallet_txn_ref(reference_type, reference_id) —
+  // see migration 003_performance_and_integrity_indexes.sql.
   if (referenceType && referenceId) {
     const [existing] = await conn.query(
       'SELECT id, balance_after FROM wallet_transactions WHERE reference_type = ? AND reference_id = ? LIMIT 1',
@@ -53,6 +56,11 @@ async function recordWalletTransaction(conn, {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [userId, type, parsedAmount, nextBalance, status, referenceType || null, referenceId || null, remark]
   );
+
+  // Notify real-time subscribers of the balance change (fire-and-forget, outside tx)
+  setImmediate(() => {
+    eventBus.emit('wallet_updated', { userId, balance: nextBalance });
+  });
 
   return nextBalance;
 }

@@ -1,5 +1,20 @@
 # Database Schema
 
+## admin_activity_logs
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| admin_id | int | NO | MUL |  |  |
+| admin_role | varchar(20) | NO |  | admin |  |
+| action | varchar(100) | NO | MUL |  |  |
+| entity_type | varchar(50) | YES | MUL |  |  |
+| entity_id | varchar(50) | YES |  |  |  |
+| details | json | YES |  |  |  |
+| ip_address | varchar(45) | YES |  |  |  |
+| created_at | timestamp | NO | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+
 ## auto_deposit_logs
 
 | Column | Type | Nullable | Key | Default | Extra |
@@ -54,6 +69,7 @@
 | settled_at | timestamp | YES |  |  |  |
 | created_at | timestamp | YES | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+| session_date | date | YES |  |  |  |
 
 
 ## bonuses
@@ -62,10 +78,21 @@
 |-------|------|----------|-----|---------|-------|
 | id | int | NO | PRI |  | auto_increment |
 | user_id | int | NO | MUL |  |  |
-| type | enum('first_deposit','slab','referral') | NO |  |  |  |
+| type | enum('first_deposit','slab','referral','daily') | NO |  |  |  |
 | amount | decimal(12,2) | NO |  |  |  |
 | reference_id | varchar(100) | YES |  |  |  |
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+
+## daily_bonus_claims
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| user_id | int | NO | MUL |  |  |
+| claim_date | date | NO |  |  |  |
+| amount | decimal(12,2) | NO |  |  |  |
+| created_at | timestamp | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 
 ## deposits
@@ -81,6 +108,21 @@
 | payer_name | varchar(150) | YES |  |  |  |
 | status | enum('completed') | YES | MUL | completed |  |
 | created_at | timestamp | YES | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+
+## fraud_alerts
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| user_id | int | NO | MUL |  |  |
+| alert_type | varchar(50) | NO | MUL |  |  |
+| severity | enum('low','medium','high','critical') | NO | MUL | medium |  |
+| details | json | NO |  |  |  |
+| is_resolved | tinyint(1) | NO | MUL | 0 |  |
+| resolved_by | int | YES |  |  |  |
+| resolved_at | timestamp | YES |  |  |  |
+| created_at | timestamp | NO | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 
 ## game_bonus_rates

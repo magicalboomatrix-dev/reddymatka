@@ -1,4 +1,12 @@
 const { recordWalletTransaction } = require('./wallet-ledger');
+const eventBus = require('./event-bus');
+
+function maskWinnerName(name) {
+  const safe = String(name || '').trim();
+  if (!safe) return 'User****';
+  if (safe.length <= 2) return `${safe.charAt(0)}****`;
+  return `${safe.slice(0, Math.min(4, safe.length))}****`;
+}
 
 /**
  * Load payout multipliers from the game_payout_rates table.
@@ -45,22 +53,32 @@ async function loadBonusRates(conn) {
 }
 
 /**
- * Settle all pending bets for a given game using the provided result string.
+ * Settle all pending bets for a given game session using the provided result string.
  * Must be called within an existing transaction (conn).
  *
- * IMPORTANT: Does NOT filter by DATE(created_at). Filters only by
- *   bets.game_id AND bets.status = 'pending'
- * The result_id links the bet to the correct game_result row.
+ * Scopes bets to the session by matching bets.session_date = resultDate.
+ * This guarantees bets from a different session are never accidentally swept
+ * into the wrong result, regardless of when the bet was placed.
  *
- * Returns the number of bets settled.
+ * @param {object} conn       - Active DB connection (inside a transaction)
+ * @param {number} gameId     - games.id
+ * @param {string} resultStr  - 2-digit result number, e.g. "07"
+ * @param {number} resultId   - game_results.id
+ * @param {object} game       - Full game row (kept for API compatibility, unused internally)
+ * @param {string} resultDate - Session close date "YYYY-MM-DD" (= bets.session_date)
+ * @returns {number} Number of bets settled.
  */
-async function settleBetsForGame(conn, gameId, resultStr, resultId) {
+async function settleBetsForGame(conn, gameId, resultStr, resultId, game, resultDate) {
   const [pendingBets] = await conn.query(
-    `SELECT b.*, bn.number, bn.amount as number_amount, bn.id as bn_id
+    `SELECT b.*, bn.number, bn.amount as number_amount, bn.id as bn_id,
+            u.name AS user_name
      FROM bets b
      JOIN bet_numbers bn ON b.id = bn.bet_id
-     WHERE b.game_id = ? AND b.status = 'pending'`,
-    [gameId]
+     JOIN users u ON u.id = b.user_id
+     WHERE b.game_id = ?
+       AND b.session_date = ?
+       AND b.status = 'pending'`,
+    [gameId, resultDate]
   );
 
   if (pendingBets.length === 0) return 0;
@@ -72,7 +90,7 @@ async function settleBetsForGame(conn, gameId, resultStr, resultId) {
   const betGroups = {};
   for (const row of pendingBets) {
     if (!betGroups[row.id]) {
-      betGroups[row.id] = { ...row, numbers: [] };
+      betGroups[row.id] = { ...row, numbers: [], user_name: row.user_name };
     }
     betGroups[row.id].numbers.push({ number: row.number, amount: parseFloat(row.number_amount) });
   }
@@ -125,8 +143,21 @@ async function settleBetsForGame(conn, gameId, resultStr, resultId) {
       // Notification sent ONLY to the specific bet owner
       await conn.query(
         'INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)',
-        [bet.user_id, 'win', `Congratulations! You won ₹${totalWin.toLocaleString('en-IN')} on your ${bet.type} bet!`]
+        [bet.user_id, 'win', `Congratulations! You won \u20b9${totalWin.toLocaleString('en-IN')} on your ${bet.type} bet!`]
       );
+
+      // Emit for the recent-winners ticker (fire-and-forget, outside tx guard is fine
+      // because the event is purely informational and recordWalletTransaction already committed).
+      // userName is masked before emission — raw userId never leaves the server.
+      const maskedName = maskWinnerName(bet.user_name);
+      setImmediate(() => {
+        eventBus.emit('recent_winner', {
+          userName: maskedName,
+          amount: totalWin,
+          betType: bet.type,
+          gameId: bet.game_id,
+        });
+      });
     }
 
     settledCount++;
@@ -135,4 +166,4 @@ async function settleBetsForGame(conn, gameId, resultStr, resultId) {
   return settledCount;
 }
 
-module.exports = { settleBetsForGame, loadPayoutRates, loadBonusRates };
+module.exports = { settleBetsForGame };
