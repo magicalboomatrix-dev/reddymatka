@@ -1,14 +1,17 @@
 'use client'
 import React, { useState, useEffect } from 'react'
-import { User, BarChart2, CreditCard, ChevronRight, Bell, Shield, FileText, Info } from 'lucide-react'
+import { User, BarChart2, CreditCard, ChevronRight, Bell, Shield, FileText, Info, PlayCircle, Gift, Headphones } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { userAPI, notificationAPI } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
+import { useTranslation } from '../lib/LanguageContext'
+import { translations } from '../lib/translations'
 
 const Profile = () => {
   const { user, logout } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [tickerIndex, setTickerIndex] = useState(0);
@@ -50,28 +53,28 @@ const Profile = () => {
         <Link href="/home">
           <img src="/images/back-btn.png" alt="Back" className="h-5 w-5" />
         </Link>
-        <h1 className="absolute left-1/2 -translate-x-1/2 text-lg font-black text-[#333]">Profile</h1>
+        <h1 className="absolute left-1/2 -translate-x-1/2 text-lg font-black text-[#333]">{t(translations.profile.title)}</h1>
         <div className="h-5 w-5" />
       </header>
 
       <main className="mx-auto w-full max-w-107.5 space-y-4 px-4 pt-4">
         {/* Profile Header Card */}
-      <section className="flex items-center bg-white px-4 py-6 shadow-sm gap-4 rounded-xl">
+        <section className="flex items-center bg-white px-4 py-6 shadow-sm gap-4 rounded-xl">
   
-  <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
-  <img
-    src="/images/user-pic.jpg"
-    alt="User"
-    className="h-full w-full object-contain"
-  />
-</div>
+          <div className="flex h-20 w-20 items-center justify-center overflow-hidden">
+            <img
+              src="/images/user-pic.jpg"
+              alt="User"
+              className="h-full w-full object-contain"
+            />
+          </div>
 
-  <div className="flex flex-col">
-    <h2 className="font-black text-[#111] text-xl">{displayName}</h2>
-    <h3 className="text-sm font-bold text-gray-800"> {phone}</h3>
-  </div>
+          <div className="flex flex-col">
+            <h2 className="font-black text-[#111] text-xl">{displayName}</h2>
+            <h3 className="text-sm font-bold text-gray-800"> {phone}</h3>
+          </div>
 
-</section>
+        </section>
 
         {/* Notifications Ticker */}
         <div className="flex items-center justify-between gap-3 bg-[#111] px-4 py-3 text-white">
@@ -80,24 +83,22 @@ const Profile = () => {
               <Bell size={18} className="text-[#ffd26a]" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#ffd26a]">Notifications</p>
+              <p className="text-[11px] font-black uppercase tracking-[0.14em] text-[#ffd26a]">{t(translations.header.notifications)}</p>
               <p className="truncate text-xs text-white/90" aria-live="polite" key={tickerIndex}>{tickerItems[tickerIndex]}</p>
             </div>
           </div>
         </div>
 
-       
-
         {/* My Account */}
         <section>
-          <h3 className="mb-2 px-1 text-xs font-black uppercase tracking-[0.12em] text-[#777]">My Account</h3>
+          <h3 className="mb-2 px-1 text-xs font-black uppercase tracking-[0.12em] text-[#777]">{t(translations.profile.personalInfo)}</h3>
           <div className="divide-y divide-[#f0ece3]">
             <Link href="/account-statement" className={menuItemClass}>
               <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#f7f6f3]">
                   <User size={28} strokeWidth={2.2} className="text-[#b88422]" />
                 </span>
-                <span>Account Statement</span>
+                <span>{t(translations.header.accountStatement)}</span>
               </div>
               <ChevronRight size={20} className="text-[#b88422]" />
             </Link>
@@ -106,7 +107,7 @@ const Profile = () => {
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#f7f6f3]">
                   <BarChart2 size={28} strokeWidth={2.2} className="text-[#b88422]" />
                 </span>
-                <span>Betting Profit &amp; Loss</span>
+                <span>{t(translations.header.bettingProfitLoss)}</span>
               </div>
               <ChevronRight size={20} className="text-[#b88422]" />
             </Link>
@@ -115,7 +116,32 @@ const Profile = () => {
                 <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#f7f6f3]">
                   <CreditCard size={28} strokeWidth={2.2} className="text-[#b88422]" />
                 </span>
-                <span>Bank Account</span>
+                <span>{t(translations.bankAccounts.title)}</span>
+              </div>
+              <ChevronRight size={20} className="text-[#b88422]" />
+            </Link>
+            <Link href="/referrals" className={menuItemClass}>
+              <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#f7f6f3]">
+                  <Gift size={28} strokeWidth={2.2} className="text-[#b88422]" />
+                </span>
+                <span>{t(translations.header.referAndEarn)}</span>
+              </div>
+              <ChevronRight size={20} className="text-[#b88422]" />
+            </Link>
+          </div>
+        </section>
+
+        {/* Support */}
+        <section>
+          <h3 className="mb-2 px-1 text-xs font-black uppercase tracking-[0.12em] text-[#777]">{t(translations.support.title)}</h3>
+          <div className="divide-y divide-[#f0ece3]">
+            <Link href="/support" className={menuItemClass}>
+              <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-[#fff4d6]">
+                  <Headphones size={20} className="text-[#c8960c]" />
+                </span>
+                <span>{t(translations.support.contactUs)}</span>
               </div>
               <ChevronRight size={20} className="text-[#b88422]" />
             </Link>
@@ -124,14 +150,23 @@ const Profile = () => {
 
         {/* Information */}
         <section>
-          <h3 className="mb-2 px-1 text-xs font-black uppercase tracking-[0.12em] text-[#777]">Information</h3>
+          <h3 className="mb-2 px-1 text-xs font-black uppercase tracking-[0.12em] text-[#777]">{t(translations.settings.about)}</h3>
           <div className="divide-y divide-[#f0ece3]">
+            <Link href="/how-to-play" className={menuItemClass}>
+              <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
+                <div className="flex h-9 w-9 items-center justify-center bg-[#fff4d6]">
+                  <PlayCircle size={20} className="text-[#c8960c]" />
+                </div>
+                <span>{t(translations.howToPlay.title)}</span>
+              </div>
+              <ChevronRight size={20} className="text-[#b88422]" />
+            </Link>
             <Link href="/privacy-policy" className={menuItemClass}>
               <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
                 <div className="flex h-9 w-9 items-center justify-center bg-[#fff4d6]">
                   <Shield size={20} className="text-[#c8960c]" />
                 </div>
-                <span>Privacy Policy</span>
+                <span>{t(translations.settings.privacy)}</span>
               </div>
             </Link>
             <Link href="/terms-and-conditions" className={menuItemClass}>
@@ -139,8 +174,9 @@ const Profile = () => {
                 <div className="flex h-9 w-9 items-center justify-center bg-[#fff4d6]">
                   <FileText size={20} className="text-[#c8960c]" />
                 </div>
-                <span>Terms &amp; Conditions</span>
+                <span>{t(translations.settings.terms)}</span>
               </div>
+              <ChevronRight size={20} className="text-[#b88422]" />
             </Link>
             <Link href="/disclaimer" className={menuItemClass}>
               <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
@@ -159,7 +195,7 @@ const Profile = () => {
           className="w-full bg-red-600 px-4 py-3 text-sm font-black uppercase tracking-[0.14em] text-white"
           onClick={handleLogout}
         >
-          Logout
+          {t(translations.header.logout)}
         </button>
       </main>
     </div>

@@ -45,7 +45,7 @@ async function recordWalletTransaction(conn, {
   const parsedAmount = parseFloat(amount || 0);
   const nextBalance = Math.round((currentBalance + parsedAmount) * 100) / 100;
 
-  if (nextBalance < 0) {
+  if (parsedAmount < 0 && nextBalance < 0 && type !== 'adjustment') {
     throw Object.assign(new Error('Insufficient wallet balance.'), { statusCode: 400 });
   }
 

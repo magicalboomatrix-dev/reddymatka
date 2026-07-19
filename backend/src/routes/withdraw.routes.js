@@ -4,6 +4,7 @@ const rateLimit = require('express-rate-limit');
 const withdrawController = require('../controllers/withdraw.controller');
 const { authenticate, authorize } = require('../middleware/auth.middleware');
 const { adminActivity } = require('../middleware/admin-activity.middleware');
+const scannerUpload = require('../middleware/scanner-upload.middleware');
 
 // Rate limit: max 5 withdrawal requests per 15 minutes per user
 const withdrawLimiter = rateLimit({
@@ -16,7 +17,7 @@ const withdrawLimiter = rateLimit({
 });
 
 // User routes
-router.post('/request', authenticate, withdrawLimiter, withdrawController.requestWithdraw);
+router.post('/request', authenticate, withdrawLimiter, scannerUpload.single('scanner_image'), withdrawController.requestWithdraw);
 router.get('/history', authenticate, withdrawController.getWithdrawHistory);
 
 // Admin/Moderator routes

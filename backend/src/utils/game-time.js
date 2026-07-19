@@ -76,26 +76,44 @@ function calculateGameDatetimes(game, resultDate) {
 }
 
 /**
- * Compute the result_date for a game given "now" (IST).
+ * Compute the result_date (= session close date) for the CURRENT session
+ * that a user would be betting into at time "now".
  *
  * result_date = DATE(close_time) — the date the session CLOSES on.
  *
- * Normal game (close_time > open_time, same day):
- *   result_date = today.
+ * Normal game (close_time >= open_time, same day):
+ *   - If now < close_time today → session closes today → result_date = today
+ *   - If now >= close_time today → the current session already closed;
+ *     next session closes tomorrow → result_date = tomorrow
  *
  * Overnight game (close_time < open_time, spans midnight):
- *   - Evening side: now >= open_time → session closes tomorrow
+ *   - Evening side (now >= open_time): session closes tomorrow
  *     → result_date = tomorrow
- *   - Early-morning side: now < open_time → session closes today
+ *   - Early-morning side (now < close_time): session closes today
  *     → result_date = today
+ *   - Between close and open (gap period): next session closes tomorrow
+ *     → result_date = tomorrow
  */
 function getResultDate(game, now = new Date()) {
+  const close = parseTime(game.close_time);
+
   if (!isOvernightGame(game)) {
-    return formatDate(now);
+    // Normal same-day game
+    const closeToday = dateAtTime(now, close);
+    if (now < closeToday) {
+      // Current session still open — closes today
+      return formatDate(now);
+    }
+    // Session already closed — next session closes tomorrow
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return formatDate(tomorrow);
   }
 
+  // Overnight game
   const open = parseTime(game.open_time);
   const openToday = dateAtTime(now, open);
+  const closeToday = dateAtTime(now, close);
 
   if (now >= openToday) {
     // Evening side — the session will close tomorrow
@@ -103,8 +121,14 @@ function getResultDate(game, now = new Date()) {
     tomorrow.setDate(tomorrow.getDate() + 1);
     return formatDate(tomorrow);
   }
-  // Early-morning side — the session closes today
-  return formatDate(now);
+  if (now < closeToday) {
+    // Early-morning side — the session closes today
+    return formatDate(now);
+  }
+  // Gap period between close and open — next session closes tomorrow
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return formatDate(tomorrow);
 }
 
 /**
@@ -143,12 +167,13 @@ function resolveGameWindow(game, now = new Date()) {
  * Returns { allowed, reason?, minutesLeft?, maxBet? }
  * maxBet is determined from the settings map provided.
  *
- * settingsMap keys: min_bet, max_bet_full, max_bet_30min, max_bet_last_30
+ * settingsMap keys: min_bet, max_bet_full, max_bet_30min, max_bet_last_30, max_bet_last_15
  *
  * Tiers:
- *   > 90 min before close → max_bet_full   (full limit)
+ *   > 90 min before close → max_bet_full    (full limit)
  *   30–90 min             → max_bet_30min   (medium limit)
- *   < 30 min              → max_bet_last_30 (low limit)
+ *   15–30 min             → max_bet_last_30 (low limit)
+ *   0–15 min              → max_bet_last_15 (final limit)
  *   after close           → blocked
  */
 function canPlaceBet(game, settingsMap = {}, now = new Date()) {
@@ -171,7 +196,8 @@ function canPlaceBet(game, settingsMap = {}, now = new Date()) {
   // If the caller didn't load settings, reject the bet rather than guess.
   const hasLimits = settingsMap.max_bet_full != null
     || settingsMap.max_bet_30min != null
-    || settingsMap.max_bet_last_30 != null;
+    || settingsMap.max_bet_last_30 != null
+    || settingsMap.max_bet_last_15 != null;
 
   if (!hasLimits) {
     return { allowed: false, reason: 'Betting limits not configured. Contact admin.' };
@@ -182,8 +208,10 @@ function canPlaceBet(game, settingsMap = {}, now = new Date()) {
     maxBet = settingsMap.max_bet_full ?? settingsMap.max_bet_30min;
   } else if (minutesLeft > 30) {
     maxBet = settingsMap.max_bet_30min ?? settingsMap.max_bet_last_30;
+  } else if (minutesLeft > 15) {
+    maxBet = settingsMap.max_bet_last_30 ?? settingsMap.max_bet_last_15;
   } else {
-    maxBet = settingsMap.max_bet_last_30 ?? settingsMap.max_bet_30min;
+    maxBet = settingsMap.max_bet_last_15 ?? settingsMap.max_bet_last_30;
   }
 
   const minBet = settingsMap.min_bet ?? 10;

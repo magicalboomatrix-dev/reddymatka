@@ -5,7 +5,7 @@ const pool = mysql.createPool({
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'REDDYMATKA',
+  database: process.env.DB_NAME || 'reddymatka',
   waitForConnections: true,
   connectionLimit: 50,
   // Cap the internal wait queue at 100 requests.  When the pool is fully
@@ -15,7 +15,7 @@ const pool = mysql.createPool({
   queueLimit: 100,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0,
-  timezone: '+05:30',
+  timezone: 'Z',
 });
 
 module.exports = pool;

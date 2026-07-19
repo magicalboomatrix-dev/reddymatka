@@ -103,7 +103,7 @@ async function checkFailedSettlements() {
   }
 
   const alertMsg =
-    `🚨 <b>REDDYMATKA — Settlement Alert</b>\n\n` +
+    `🚨 <b>reddymatka — Settlement Alert</b>\n\n` +
     `${cnt} settlement job(s) are in <b>FAILED</b> status.\n` +
     `Go to Settlement Monitor → retry failed jobs.\n\n` +
     `<i>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</i>`;
@@ -133,7 +133,7 @@ async function checkStaleJobs() {
   }
 
   const alertMsg =
-    `⚠️ <b>REDDYMATKA — Stale Settlement Jobs</b>\n\n` +
+    `⚠️ <b>reddymatka — Stale Settlement Jobs</b>\n\n` +
     `${cnt} job(s) have been in <b>PROCESSING</b> state for ` +
     `more than ${STALE_PROCESSING_MINUTES} minutes.\n` +
     `The settlement worker may have crashed.\n\n` +
@@ -153,7 +153,7 @@ async function checkStaleJobs() {
  */
 async function checkLedgerDrift() {
   const [[walletSum]] = await pool.query(
-    'SELECT COALESCE(SUM(balance), 0) AS total FROM wallets'
+    'SELECT COALESCE(SUM(balance + bonus_balance), 0) AS total FROM wallets'
   );
   const [[txnSum]] = await pool.query(
     'SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_transactions WHERE status = ?',
@@ -166,7 +166,7 @@ async function checkLedgerDrift() {
 
   if (drift > 0.01) {
     const alertMsg =
-      `🔴 <b>REDDYMATKA — Ledger Drift Detected</b>\n\n` +
+      `🔴 <b>reddymatka — Ledger Drift Detected</b>\n\n` +
       `Wallet balances total: <b>₹${walletTotal.toFixed(2)}</b>\n` +
       `Transaction net total: <b>₹${txnTotal.toFixed(2)}</b>\n` +
       `Drift: <b>₹${drift.toFixed(2)}</b>\n\n` +

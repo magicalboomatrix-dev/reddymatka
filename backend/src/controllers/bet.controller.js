@@ -83,7 +83,7 @@ exports.placeBet = async (req, res, next) => {
 
     // Check game exists and is active
     const [games] = await conn.query(
-      'SELECT id, open_time, close_time, is_overnight, is_active FROM games WHERE id = ? AND is_active = 1',
+      'SELECT id, name, open_time, close_time, is_overnight, is_active FROM games WHERE id = ? AND is_active = 1',
       [game_id]
     );
     if (games.length === 0) {
@@ -101,7 +101,7 @@ exports.placeBet = async (req, res, next) => {
 
     // Check time-based betting constraints using the game-time utility
     const [settings] = await conn.query(
-      "SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE 'max_bet_%' OR setting_key = 'min_bet'"
+      "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('max_bet_full','max_bet_30min','max_bet_last_30','max_bet_last_15','min_bet')"
     );
     const settingsMap = {};
     for (const s of settings) {
@@ -129,15 +129,24 @@ exports.placeBet = async (req, res, next) => {
       }
     }
 
-    // Check wallet balance
-    const [wallets] = await conn.query('SELECT balance FROM wallets WHERE user_id = ? FOR UPDATE', [req.user.id]);
+    // Check wallet balance (balance + bonus_balance)
+    // 10% of bet comes from bonus_balance, 90% from balance.
+    // If bonus_balance is insufficient for 10%, use what's available and rest from balance.
+    const [wallets] = await conn.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ? FOR UPDATE', [req.user.id]);
     if (wallets.length === 0) {
       await conn.rollback();
       return res.status(400).json({ error: 'Wallet not found.' });
     }
 
     const currentBalance = parseFloat(wallets[0].balance);
-    if (currentBalance < totalAmount) {
+    const currentBonus = parseFloat(wallets[0].bonus_balance || 0);
+
+    // Calculate bonus portion: 10% of bet, capped at available bonus
+    const idealBonusPortion = Math.round(totalAmount * 0.10 * 100) / 100;
+    const bonusUsed = Math.min(idealBonusPortion, currentBonus);
+    const balanceUsed = Math.round((totalAmount - bonusUsed) * 100) / 100;
+
+    if (currentBalance < balanceUsed) {
       await conn.rollback();
       return res.status(400).json({ error: 'Insufficient balance.' });
     }
@@ -161,13 +170,26 @@ exports.placeBet = async (req, res, next) => {
       [betNumberRows]
     );
 
+    // Deduct bonus portion from bonus_balance and record in ledger
+    if (bonusUsed > 0) {
+      await conn.query('UPDATE wallets SET bonus_balance = bonus_balance - ? WHERE user_id = ?', [bonusUsed, req.user.id]);
+      const [[bonusWallet]] = await conn.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ?', [req.user.id]);
+      const bonusBalanceAfter = parseFloat(bonusWallet.balance) + parseFloat(bonusWallet.bonus_balance);
+      await conn.query(
+        `INSERT INTO wallet_transactions
+          (user_id, type, amount, balance_after, status, reference_type, reference_id, remark)
+         VALUES (?, 'bet', ?, ?, 'completed', 'bet_bonus', ?, ?)`,
+        [req.user.id, -bonusUsed, bonusBalanceAfter, `bet_bonus_${betId}`, `Bonus used for ${type} bet on ${game.name}`]
+      );
+    }
+
     const newBalance = await recordWalletTransaction(conn, {
       userId: req.user.id,
       type: 'bet',
-      amount: -totalAmount,
+      amount: -balanceUsed,
       referenceType: 'bet',
       referenceId: `bet_${betId}`,
-      remark: `${type} bet on ${game.name}`,
+      remark: `${type} bet on ${game.name}${bonusUsed > 0 ? ` (₹${bonusUsed} from bonus)` : ''}`,
     });
 
     await conn.commit();
@@ -276,6 +298,176 @@ exports.getUserBets = async (req, res, next) => {
         total: countResult[0][0].total,
         totalPages: Math.ceil(countResult[0][0].total / limit),
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAllBets = async (req, res, next) => {
+  try {
+    const { game_id, status, search, from_date, to_date, moderator_id } = req.query;
+    const { page, limit, offset } = clampPagination(req.query);
+
+    const baseJoins = `
+      FROM bets b
+      JOIN users u ON u.id = b.user_id
+      LEFT JOIN users moderator_user ON moderator_user.id = u.moderator_id
+      JOIN games g ON g.id = b.game_id
+      LEFT JOIN game_results gr_linked ON gr_linked.id = b.game_result_id
+      LEFT JOIN game_results gr_session
+        ON gr_session.game_id = b.game_id
+       AND gr_session.result_date = COALESCE(b.session_date, DATE(b.created_at))
+    `;
+
+    let filters = ' WHERE 1 = 1';
+    const params = [];
+
+    if (req.user.role === 'moderator') {
+      filters += ' AND u.moderator_id = ?';
+      params.push(req.user.id);
+    } else if (moderator_id) {
+      filters += ' AND u.moderator_id = ?';
+      params.push(moderator_id);
+    }
+
+    if (game_id) {
+      filters += ' AND b.game_id = ?';
+      params.push(game_id);
+    }
+
+    if (status) {
+      filters += ' AND b.status = ?';
+      params.push(status);
+    }
+
+    if (from_date) {
+      filters += ' AND COALESCE(b.session_date, DATE(b.created_at)) >= ?';
+      params.push(from_date);
+    }
+
+    if (to_date) {
+      filters += ' AND COALESCE(b.session_date, DATE(b.created_at)) <= ?';
+      params.push(to_date);
+    }
+
+    if (search) {
+      const escaped = escapeLike(search);
+      filters += `
+        AND (
+          CAST(b.id AS CHAR) LIKE ?
+          OR
+          u.name LIKE ?
+          OR u.phone LIKE ?
+          OR g.name LIKE ?
+          OR b.type LIKE ?
+          OR COALESCE(gr_linked.result_number, gr_session.result_number) LIKE ?
+          OR EXISTS (
+            SELECT 1
+            FROM bet_numbers bn_search
+            WHERE bn_search.bet_id = b.id
+              AND bn_search.number LIKE ?
+          )
+        )
+      `;
+      params.push(
+        `%${escaped}%`,
+        `%${escaped}%`,
+        `%${escaped}%`,
+        `%${escaped}%`,
+        `%${escaped}%`,
+        `%${escaped}%`,
+        `%${escaped}%`
+      );
+    }
+
+    const countQuery = `SELECT COUNT(*) as total ${baseJoins} ${filters}`;
+    const summaryQuery = `
+      SELECT
+        COUNT(*) as totalBets,
+        COALESCE(SUM(b.total_amount), 0) as totalStake,
+        COALESCE(SUM(b.win_amount), 0) as totalWin,
+        COALESCE(SUM(b.win_amount - b.total_amount), 0) as netProfitLoss
+      ${baseJoins} ${filters}
+    `;
+
+    const dataQuery = `
+      SELECT
+        b.id,
+        b.user_id,
+        b.game_id,
+        b.type,
+        b.total_amount,
+        b.win_amount,
+        b.status,
+        b.created_at,
+        b.updated_at,
+        DATE_FORMAT(COALESCE(b.session_date, DATE(b.created_at)), '%Y-%m-%d') as session_date,
+        u.name AS user_name,
+        u.phone AS user_phone,
+        u.moderator_id,
+        moderator_user.name AS moderator_name,
+        g.name AS game_name,
+        COALESCE(gr_linked.result_number, gr_session.result_number) AS result_number,
+        DATE_FORMAT(COALESCE(gr_linked.result_date, gr_session.result_date), '%Y-%m-%d') AS result_date,
+        GROUP_CONCAT(CONCAT(bn.number, ' (₹', FORMAT(bn.amount, 2), ')') ORDER BY bn.id SEPARATOR ', ') AS bet_numbers
+      ${baseJoins}
+      LEFT JOIN bet_numbers bn ON bn.bet_id = b.id
+      ${filters}
+      GROUP BY
+        b.id,
+        b.user_id,
+        b.game_id,
+        b.type,
+        b.total_amount,
+        b.win_amount,
+        b.status,
+        b.created_at,
+        b.updated_at,
+        b.session_date,
+        u.name,
+        u.phone,
+        u.moderator_id,
+        moderator_user.name,
+        g.name,
+        gr_linked.result_number,
+        gr_linked.result_date,
+        gr_session.result_number,
+        gr_session.result_date
+      ORDER BY COALESCE(b.session_date, DATE(b.created_at)) DESC, b.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const [countResult, summaryResult, betsResult] = await Promise.all([
+      pool.query(countQuery, params),
+      pool.query(summaryQuery, params),
+      pool.query(dataQuery, [...params, limit, offset]),
+    ]);
+
+    const summaryRow = summaryResult[0][0] || {};
+
+    const bets = (betsResult[0] || []).map((bet) => ({
+      ...bet,
+      total_amount: Number(bet.total_amount || 0),
+      win_amount: Number(bet.win_amount || 0),
+      profit_loss: Number((Number(bet.win_amount || 0) - Number(bet.total_amount || 0)).toFixed(2)),
+      loss_amount: Math.max(Number((Number(bet.total_amount || 0) - Number(bet.win_amount || 0)).toFixed(2)), 0),
+    }));
+
+    res.json({
+      bets,
+      summary: {
+        totalBets: Number(summaryRow.totalBets || 0),
+        totalStake: Number(summaryRow.totalStake || 0),
+        totalWin: Number(summaryRow.totalWin || 0),
+        netProfitLoss: Number(summaryRow.netProfitLoss || 0),
+      },
+      pagination: {
+        page,
+        limit,
+        total: Number(countResult[0][0]?.total || 0),
+        totalPages: Math.ceil(Number(countResult[0][0]?.total || 0) / limit),
+      },
     });
   } catch (error) {
     next(error);

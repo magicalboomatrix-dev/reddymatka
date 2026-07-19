@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { sendOtpSms } = require('../utils/sms');
 const { getPhoneCandidates, toE164Phone } = require('../utils/phone');
-const { IST_NOW_SQL } = require('../utils/sql-time');
 
 const MAX_MPIN_ATTEMPTS = 5;
 const MPIN_BLOCK_MINUTES = 30;
@@ -23,7 +22,7 @@ function setAuthCookie(res, token) {
 }
 
 function generateReferralCode() {
-  return 'REDDYMATKA' + Math.random().toString(36).substring(2, 8).toUpperCase();
+  return 'reddymatka' + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
 function generateOTP() {
@@ -132,7 +131,7 @@ exports.verifyOTP = async (req, res, next) => {
     }
 
     const [otpRecords] = await pool.query(
-      `SELECT * FROM otps WHERE phone IN (?) AND purpose = ? AND is_used = 0 AND expires_at > ${IST_NOW_SQL} ORDER BY id DESC LIMIT 1`,
+      `SELECT * FROM otps WHERE phone IN (?) AND purpose = ? AND is_used = 0 AND expires_at > UTC_TIMESTAMP() ORDER BY id DESC LIMIT 1`,
       [phoneCandidates, purpose]
     );
 
@@ -243,32 +242,19 @@ exports.completeProfile = async (req, res, next) => {
     // Create wallet
     await conn.query('INSERT INTO wallets (user_id, balance, bonus_balance) VALUES (?, 0.00, 0.00)', [userId]);
 
-    // Handle referral
+    // Handle referral — bonus is deferred until the referred user's first deposit
     if (referrer) {
-        const [settings] = await conn.query("SELECT setting_value FROM settings WHERE setting_key = 'referral_bonus'");
-        const bonusAmount = settings.length > 0 ? parseFloat(settings[0].setting_value) : 0;
+      const [settings] = await conn.query("SELECT setting_value FROM settings WHERE setting_key = 'referral_bonus'");
+      const bonusAmount = settings.length > 0 ? parseFloat(settings[0].setting_value) : 0;
 
-        if (bonusAmount > 0) {
-          await conn.query('INSERT INTO referrals (referrer_id, referred_user_id, bonus_amount) VALUES (?, ?, ?)',
-            [referrer.id, userId, bonusAmount]);
-
-          // Lock wallet row before updating bonus_balance
-          await conn.query('SELECT balance FROM wallets WHERE user_id = ? FOR UPDATE', [referrer.id]);
-          await conn.query('UPDATE wallets SET bonus_balance = bonus_balance + ? WHERE user_id = ?',
-            [bonusAmount, referrer.id]);
-
-          await conn.query('INSERT INTO bonuses (user_id, type, amount, reference_id) VALUES (?, ?, ?, ?)',
-            [referrer.id, 'referral', bonusAmount, `ref_${userId}`]);
-
-          // Record in wallet_transactions ledger
-          const [[walletRow]] = await conn.query('SELECT balance FROM wallets WHERE user_id = ?', [referrer.id]);
-          await conn.query(
-            `INSERT INTO wallet_transactions
-              (user_id, type, amount, balance_after, status, reference_type, reference_id, remark)
-             VALUES (?, 'bonus', ?, ?, 'completed', 'bonus', ?, ?)`,
-            [referrer.id, bonusAmount, parseFloat(walletRow.balance), `referral_${userId}`, `Referral bonus for user #${userId}`]
-          );
-        }
+      if (bonusAmount > 0) {
+        // Create referral record with status='pending' — bonus will be credited
+        // to the referred user (not referrer) after their first deposit
+        await conn.query(
+          'INSERT INTO referrals (referrer_id, referred_user_id, bonus_amount, status) VALUES (?, ?, ?, ?)',
+          [referrer.id, userId, bonusAmount, 'pending']
+        );
+      }
     }
 
     await conn.commit();
@@ -455,7 +441,7 @@ exports.adminLogin = async (req, res, next) => {
     }
 
     const [users] = await pool.query(
-      'SELECT id, name, phone, password, role, failed_login_attempts, login_blocked_until FROM users WHERE phone IN (?) AND role IN (?, ?) LIMIT 1',
+      'SELECT id, name, phone, password, role, is_blocked, failed_login_attempts, login_blocked_until FROM users WHERE phone IN (?) AND role IN (?, ?) AND is_deleted = 0 LIMIT 1',
       [phoneCandidates, 'admin', 'moderator']
     );
 
@@ -464,6 +450,11 @@ exports.adminLogin = async (req, res, next) => {
     }
 
     const user = users[0];
+
+    // Check if account is blocked
+    if (user.is_blocked) {
+      return res.status(403).json({ error: 'Your account has been blocked. Contact support.' });
+    }
 
     // Check if account is temporarily locked
     if (user.login_blocked_until && new Date(user.login_blocked_until) > new Date()) {
@@ -494,7 +485,7 @@ exports.adminLogin = async (req, res, next) => {
       expiresIn: process.env.JWT_EXPIRES_IN || '7d'
     });
 
-    const { password: _, failed_login_attempts: _a, login_blocked_until: _b, ...userWithoutPassword } = user;
+    const { password: _, is_blocked: _bl, failed_login_attempts: _a, login_blocked_until: _b, ...userWithoutPassword } = user;
     setAuthCookie(res, token);
     res.json({ message: 'Login successful.', token, user: userWithoutPassword });
   } catch (error) {
@@ -505,4 +496,10 @@ exports.adminLogin = async (req, res, next) => {
 exports.logout = (req, res) => {
   res.clearCookie('token', { path: '/' });
   res.json({ message: 'Logged out.' });
+};
+
+// Return the currently authenticated user (used by admin dashboard to verify session)
+exports.getMe = (req, res) => {
+  const { id, name, phone, role, moderator_id, referral_code } = req.user;
+  res.json({ user: { id, name, phone, role, moderator_id, referral_code } });
 };

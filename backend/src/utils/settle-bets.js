@@ -1,5 +1,11 @@
 const { recordWalletTransaction } = require('./wallet-ledger');
 const eventBus = require('./event-bus');
+const logger = require('./logger');
+const {
+  getBetCreditSummary,
+  reconcileWalletForBet,
+  renameBetSettlementReferences,
+} = require('./bet-reconciliation');
 
 function maskWinnerName(name) {
   const safe = String(name || '').trim();
@@ -44,11 +50,14 @@ async function loadBonusRates(conn) {
   for (const r of rows) {
     bonus[r.game_type] = parseFloat(r.bonus_multiplier);
   }
+  // Use || 1 (not ?? 1) so that 0 also falls back to 1.
+  // bonus_multiplier = 0 would zero out all payouts — clearly a misconfiguration.
+  // Valid values: 1.00 = no bonus, >1 = extra bonus (e.g. 1.10 = 10% bonus).
   return {
-    jodi: bonus.jodi ?? 1,
-    haruf_andar: bonus.haruf_andar ?? 1,
-    haruf_bahar: bonus.haruf_bahar ?? 1,
-    crossing: bonus.crossing ?? 1,
+    jodi: bonus.jodi || 1,
+    haruf_andar: bonus.haruf_andar || 1,
+    haruf_bahar: bonus.haruf_bahar || 1,
+    crossing: bonus.crossing || 1,
   };
 }
 
@@ -131,33 +140,31 @@ async function settleBetsForGame(conn, gameId, resultStr, resultId, game, result
     );
 
     if (totalWin > 0) {
-      await recordWalletTransaction(conn, {
-        userId: bet.user_id,
-        type: 'win',
-        amount: totalWin,
-        referenceType: 'bet',
-        referenceId: `bet_${betId}`,
+      const reconciliation = await reconcileWalletForBet(conn, betId, {
+        expectedCredit: totalWin,
         remark: `Won on ${bet.type} bet`,
       });
 
-      // Notification sent ONLY to the specific bet owner
-      await conn.query(
-        'INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)',
-        [bet.user_id, 'win', `Congratulations! You won \u20b9${totalWin.toLocaleString('en-IN')} on your ${bet.type} bet!`]
-      );
+      if (reconciliation.creditedDelta > 0) {
+        // Notification sent ONLY to the specific bet owner
+        await conn.query(
+          'INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)',
+          [bet.user_id, 'win', `Congratulations! You won \u20b9${totalWin.toLocaleString('en-IN')} on your ${bet.type} bet!`]
+        );
 
-      // Emit for the recent-winners ticker (fire-and-forget, outside tx guard is fine
-      // because the event is purely informational and recordWalletTransaction already committed).
-      // userName is masked before emission — raw userId never leaves the server.
-      const maskedName = maskWinnerName(bet.user_name);
-      setImmediate(() => {
-        eventBus.emit('recent_winner', {
-          userName: maskedName,
-          amount: totalWin,
-          betType: bet.type,
-          gameId: bet.game_id,
+        // Emit for the recent-winners ticker (fire-and-forget, outside tx guard is fine
+        // because the event is purely informational and recordWalletTransaction already committed).
+        // userName is masked before emission — raw userId never leaves the server.
+        const maskedName = maskWinnerName(bet.user_name);
+        setImmediate(() => {
+          eventBus.emit('recent_winner', {
+            userName: maskedName,
+            amount: totalWin,
+            betType: bet.type,
+            gameId: bet.game_id,
+          });
         });
-      });
+      }
     }
 
     settledCount++;
@@ -166,4 +173,80 @@ async function settleBetsForGame(conn, gameId, resultStr, resultId, game, result
   return settledCount;
 }
 
-module.exports = { settleBetsForGame };
+/**
+ * Reverse a previous settlement for a game result.
+ * Must be called within an existing transaction (conn).
+ *
+ * 1. Finds all bets settled against this game_result_id
+ * 2. For winning bets, deducts the win_amount from wallet
+ * 3. Resets all bets back to 'pending'
+ * 4. Resets game_results.is_settled = 0
+ *
+ * @param {object} conn          - Active DB connection (inside a transaction)
+ * @param {number} gameResultId  - game_results.id
+ * @returns {number} Number of bets reversed.
+ */
+async function reverseSettlement(conn, gameResultId) {
+  // Find all bets settled against this result
+  const [settledBets] = await conn.query(
+    `SELECT id, user_id, win_amount, status, type
+     FROM bets
+     WHERE game_result_id = ? AND status IN ('win', 'loss')`,
+    [gameResultId]
+  );
+
+  if (settledBets.length === 0) return 0;
+
+  // Unique suffix for this reversal to allow multiple revisions
+  const revisionTs = Date.now();
+  let reversedCount = 0;
+  const betIds = [];
+
+  for (const bet of settledBets) {
+    // If the bet was a win, deduct the winnings from wallet
+    if (bet.status === 'win' && parseFloat(bet.win_amount) > 0) {
+      const expectedWin = parseFloat(bet.win_amount);
+      const creditSummary = await getBetCreditSummary(conn, bet.id);
+      const netCredited = Math.max(0, creditSummary.netCredited);
+
+      if (Math.abs(expectedWin - creditSummary.netCredited) >= 0.01) {
+        logger.warn('settle-bets', 'Reverse settlement detected wallet drift', {
+          bet_id: bet.id,
+          user_id: bet.user_id,
+          expected_credit: expectedWin,
+          credited_amount: creditSummary.netCredited,
+          shortfall: Math.round((expectedWin - creditSummary.netCredited) * 100) / 100,
+        });
+      }
+
+      const renamedRows = await renameBetSettlementReferences(conn, bet.id, revisionTs);
+
+      if (netCredited > 0) {
+        await recordWalletTransaction(conn, {
+          userId: bet.user_id,
+          type: 'adjustment',
+          amount: -Math.abs(netCredited),
+          referenceType: 'bet_reversal',
+          referenceId: `bet_reversal_${bet.id}_${revisionTs}`,
+          remark: `Result revised — reversed ${bet.type} win (${renamedRows} credit reference(s) archived)`,
+        });
+      }
+    }
+
+    // Reset bet to pending
+    await conn.query(
+      `UPDATE bets SET status = 'pending', win_amount = 0, game_result_id = NULL, settled_at = NULL WHERE id = ?`,
+      [bet.id]
+    );
+
+    betIds.push(bet.id);
+    reversedCount++;
+  }
+
+  // Reset the game_results settled flag
+  await conn.query('UPDATE game_results SET is_settled = 0 WHERE id = ?', [gameResultId]);
+
+  return { reversedCount, betIds };
+}
+
+module.exports = { settleBetsForGame, reverseSettlement };

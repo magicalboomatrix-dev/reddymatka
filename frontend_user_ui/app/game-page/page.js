@@ -80,9 +80,15 @@ function GamePageInner() {
   const [crossAmount, setCrossAmount] = useState('');
   const [crossIncludeJodi, setCrossIncludeJodi] = useState(true); 
   const [crossCombos, setCrossCombos] = useState([]);
+
+  // Message (bulk bet) state
+  const [messageText, setMessageText] = useState('');
+  const [messageBets, setMessageBets] = useState([]);
+  const [messageError, setMessageError] = useState('');
   const [gameInfo, setGameInfo] = useState(null)
   const [countdown, setCountdown] = useState('00:00')
   const [bettingClosed, setBettingClosed] = useState(false)
+  const [gameDisabled, setGameDisabled] = useState(false)
   const [serverOffsetMs, setServerOffsetMs] = useState(0)
   // Removed favorites state and related logic
 
@@ -95,7 +101,9 @@ function GamePageInner() {
       try {
         const response = await gameAPI.getInfo(gameId)
         if (cancelled) return
-        setGameInfo(response.game || null)
+        const game = response.game || null
+        setGameInfo(game)
+        setGameDisabled(game && game.is_active !== 1 && game.is_active !== true)
         if (response.server_now) {
           setServerOffsetMs(new Date(response.server_now).getTime() - Date.now())
         }
@@ -232,12 +240,12 @@ function GamePageInner() {
     setHarufPopup(false);
   };
 
-  // --- Crossing Logic ---
-  const generateCrossCombos = () => {
-    if (bettingClosed) return
-    const raw = crossDigits.replace(/\D/g, '').slice(0, 7); 
+  // --- Crossing Logic (auto-generate on input change) ---
+  useEffect(() => {
+    if (bettingClosed) { setCrossCombos([]); return; }
+    const raw = crossDigits.replace(/\D/g, '').slice(0, 7);
     const amt = parseInt(crossAmount);
-    if (!raw || raw.length < 2 || !amt) return;
+    if (!raw || raw.length < 2 || !amt) { setCrossCombos([]); return; }
 
     const uniqueDigits = [...new Set(raw.split(''))];
     const combos = [];
@@ -251,7 +259,73 @@ function GamePageInner() {
       }
     }
     setCrossCombos(combos);
+  }, [crossDigits, crossAmount, crossIncludeJodi, bettingClosed]);
+
+  // --- Message (bulk bet) parser ---
+  function parseBetMessage(text) {
+    if (!text || !text.trim()) return [];
+    const results = new Map();
+    const lines = text.split(/\n/).map(l => l.trim()).filter(Boolean);
+
+    for (const line of lines) {
+      // Pattern 3: "12 13 45 34 (30)" — multiple numbers, same amount in parens
+      const groupMatch = line.match(/^([\d\s]+)\(\s*(\d+)\s*\)$/);
+      if (groupMatch) {
+        const amt = parseInt(groupMatch[2]);
+        if (amt > 0) {
+          const nums = groupMatch[1].trim().split(/\s+/);
+          for (const n of nums) {
+            const padded = n.padStart(2, '0');
+            if (/^\d{1,2}$/.test(n) && parseInt(n) >= 0 && parseInt(n) <= 99) {
+              results.set(padded, amt);
+            }
+          }
+        }
+        continue;
+      }
+
+      // Pattern 1 & 2: "12=50" or "12=50,15=50,88=10"
+      const segments = line.split(',').map(s => s.trim()).filter(Boolean);
+      for (const seg of segments) {
+        const pairMatch = seg.match(/^(\d{1,2})\s*=\s*(\d+)$/);
+        if (pairMatch) {
+          const num = parseInt(pairMatch[1]);
+          const amt = parseInt(pairMatch[2]);
+          if (num >= 0 && num <= 99 && amt > 0) {
+            results.set(String(num).padStart(2, '0'), amt);
+          }
+        }
+      }
+    }
+    return Array.from(results.entries()).map(([number, amount]) => ({ number, amount }));
+  }
+
+  // Live-parse message text
+  useEffect(() => {
+    const parsed = parseBetMessage(messageText);
+    setMessageBets(parsed);
+    setMessageError('');
+  }, [messageText]);
+
+  const addMessageBets = () => {
+    if (messageBets.length === 0) {
+      setMessageError('Invalid format detected. Please follow supported patterns.');
+      return;
+    }
+    // Merge into savedAmounts (jodi)
+    setSavedAmounts(prev => {
+      const copy = { ...prev };
+      for (const b of messageBets) {
+        copy[b.number] = String(b.amount);
+      }
+      return copy;
+    });
+    setMessageText('');
+    setMessageBets([]);
+    setActiveTab('tab-1');
   };
+
+  const messageBetsTotal = useMemo(() => messageBets.reduce((s, b) => s + b.amount, 0), [messageBets]);
 
   const getTotal = useCallback(() => {
     let total = 0;
@@ -266,6 +340,10 @@ function GamePageInner() {
     if (!gameId) return;
     if (bettingClosed) {
       setError('Betting Closed');
+      return;
+    }
+    if (gameDisabled) {
+      setError('Game Closed');
       return;
     }
     setError('');
@@ -308,6 +386,8 @@ function GamePageInner() {
       setSavedAmounts({}); setHarufAndar({}); setHarufBahar({}); setCrossCombos([]);
       setCrossDigits('');
       setCrossAmount('');
+      setMessageText('');
+      setMessageBets([]);
 
       const params = new URLSearchParams({
         type: 'bet',
@@ -326,8 +406,8 @@ function GamePageInner() {
 
   const inputClass = 'w-full border-2 border-[#e0e0e0] bg-white px-4 py-3 text-center text-xl font-semibold text-[#1a1a1a] outline-none transition focus:border-[#b88422]';
   const primaryButtonClass = 'w-full bg-black px-4 py-3 text-base font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60';
-  const tabButtonClass = (isActive) => `px-4 py-2 text-sm font-black uppercase tracking-[0.14em] transition ${isActive ? 'bg-black text-[#ffd26a] shadow-[0_10px_20px_rgba(0,0,0,0.18)]' : 'text-[#6b7280]'}`;
-  const cardBoxClass = (isActive) => `cursor-pointer border px-2 py-3 text-center transition ${isActive ? 'border-[#b88422] bg-[#fff5d9] shadow-[0_8px_18px_rgba(184,132,34,0.18)]' : 'border-[#ddd] bg-white hover:border-[#d5b163]'}`;
+  const tabButtonClass = (isActive) => `px-2 py-1.5 text-[11px] font-black uppercase tracking-[0.1em] transition sm:px-4 sm:py-2 sm:text-sm sm:tracking-[0.14em] ${isActive ? 'bg-black text-[#ffd26a] shadow-[0_4px_10px_rgba(0,0,0,0.18)]' : 'text-[#6b7280]'}`;
+  const cardBoxClass = (isActive) => `cursor-pointer border px-1 py-1.5 text-center transition sm:px-2 sm:py-2 ${isActive ? 'border-[#b88422] bg-[#fff5d9] shadow-[0_4px_10px_rgba(184,132,34,0.18)]' : 'border-[#ddd] bg-white hover:border-[#d5b163]'}`;
 
   return (
     <div className="relative mx-auto w-full max-w-107.5 bg-[#f6f7fa] pb-28">
@@ -340,9 +420,11 @@ function GamePageInner() {
         {success && <div className="mt-2 text-center text-sm font-semibold text-[#15803d]">{success}</div>}
 
         <div className="mt-2 border border-[#eadcc0] bg-white p-3 text-center shadow-[0_10px_20px_rgba(15,23,42,0.08)]">
-          <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#6b5a3a]">Game closes in</div>
-          <div className={`mt-1 text-xl font-black ${bettingClosed ? 'text-[#b91c1c]' : 'text-[#111]'}`}>
-            {bettingClosed ? 'Betting Closed' : countdown}
+          <div className="text-[11px] font-black uppercase tracking-[0.14em] text-[#6b5a3a]">
+            {gameDisabled ? 'Status' : 'Game closes in'}
+          </div>
+          <div className={`mt-1 text-xl font-black ${bettingClosed || gameDisabled ? 'text-[#b91c1c]' : 'text-[#111]'}`}>
+            {gameDisabled ? 'Game Closed' : (bettingClosed ? 'Betting Closed' : countdown)}
           </div>
         </div>
 
@@ -361,74 +443,75 @@ function GamePageInner() {
 
 
         <div className="mt-4 overflow-hidden border border-[#eadcc0] bg-white shadow-[0_18px_34px_rgba(15,23,42,0.08)]">
-          <div className="flex gap-2 border-b border-[#f1e7d3] bg-[#fff8e7] p-2">
+          <div className="flex gap-1 border-b border-[#f1e7d3] bg-[#fff8e7] p-1.5 sm:gap-2 sm:p-2">
             <button type="button" className={tabButtonClass(activeTab === 'tab-1')} onClick={() => setActiveTab('tab-1')}>Jodi</button>
             <button type="button" className={tabButtonClass(activeTab === 'tab-2')} onClick={() => setActiveTab('tab-2')}>Haruf</button>
             <button type="button" className={tabButtonClass(activeTab === 'tab-3')} onClick={() => setActiveTab('tab-3')}>Crossing</button>
+            <button type="button" className={tabButtonClass(activeTab === 'tab-4')} onClick={() => setActiveTab('tab-4')}>Message</button>
           </div>
 
           <div className={activeTab === 'tab-1' ? 'block' : 'hidden'}>
             {/* Removed favorites UI */}
-            <div className="grid grid-cols-5 gap-2 p-4">
+            <div className="grid grid-cols-5 gap-1 p-2 sm:gap-2 sm:p-3">
                 {jodiNumbers.map((num) => (
-                  <div key={num} className={`${cardBoxClass(Boolean(savedAmounts[num]))} ${bettingClosed ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={() => openPopup(num)}>
-                    <div className="flex items-center justify-center gap-1">
-                      <div className="text-sm font-semibold text-[#111]">{num}</div>
+                  <div key={num} className={`${cardBoxClass(Boolean(savedAmounts[num]))} ${bettingClosed || gameDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={() => !gameDisabled && openPopup(num)}>
+                    <div className="flex items-center justify-center gap-0.5">
+                      <div className="text-xs font-semibold text-[#111] sm:text-sm">{num}</div>
                     </div>
-                    {savedAmounts[num] && <div className="mt-1 text-[10px] font-bold text-[#d62828]">₹{savedAmounts[num]}</div>}
+                    {savedAmounts[num] && <div className="mt-0.5 text-[9px] font-bold text-[#d62828] sm:text-[10px]">₹{savedAmounts[num]}</div>}
                   </div>
                 ))}
             </div>
           </div>
 
           <div className={activeTab === 'tab-2' ? 'block' : 'hidden'}>
-            <div className="px-4 pt-1 text-sm font-black uppercase tracking-[0.14em] text-[#111]">Andar</div>
-            <div className="grid grid-cols-5 gap-2 px-4 py-3">
+            <div className="px-2 pt-1 text-xs font-black uppercase tracking-[0.14em] text-[#111] sm:px-3 sm:text-sm">Andar</div>
+            <div className="grid grid-cols-5 gap-1 px-2 py-2 sm:gap-2 sm:px-3 sm:py-3">
                   {harufDigits.map(d => (
-                    <div key={`a${d}`} className={cardBoxClass(Boolean(harufAndar[d]))} onClick={() => openHarufPopup(d, 'andar')}>
-                      {d} {harufAndar[d] && <div className="mt-1 text-[10px] font-bold text-[#d62828]">₹{harufAndar[d]}</div>}
+                    <div key={`a${d}`} className={`${cardBoxClass(Boolean(harufAndar[d]))} ${gameDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={() => !gameDisabled && openHarufPopup(d, 'andar')}>
+                      <span className="text-xs font-semibold sm:text-sm">{d}</span> {harufAndar[d] && <div className="mt-0.5 text-[9px] font-bold text-[#d62828] sm:text-[10px]">₹{harufAndar[d]}</div>}
                     </div>
                   ))}
             </div>
-            <div className="px-4 pt-1 text-sm font-black uppercase tracking-[0.14em] text-[#111]">Bahar</div>
-            <div className="grid grid-cols-5 gap-2 px-4 py-3">
+            <div className="px-2 pt-1 text-xs font-black uppercase tracking-[0.14em] text-[#111] sm:px-3 sm:text-sm">Bahar</div>
+            <div className="grid grid-cols-5 gap-1 px-2 py-2 sm:gap-2 sm:px-3 sm:py-3">
                   {harufDigits.map(d => (
-                    <div key={`b${d}`} className={cardBoxClass(Boolean(harufBahar[d]))} onClick={() => openHarufPopup(d, 'bahar')}>
-                      {d} {harufBahar[d] && <div className="mt-1 text-[10px] font-bold text-[#d62828]">₹{harufBahar[d]}</div>}
+                    <div key={`b${d}`} className={`${cardBoxClass(Boolean(harufBahar[d]))} ${gameDisabled ? 'opacity-60 cursor-not-allowed' : ''}`} onClick={() => !gameDisabled && openHarufPopup(d, 'bahar')}>
+                      <span className="text-xs font-semibold sm:text-sm">{d}</span> {harufBahar[d] && <div className="mt-0.5 text-[9px] font-bold text-[#d62828] sm:text-[10px]">₹{harufBahar[d]}</div>}
                     </div>
                   ))}
             </div>
           </div>
 
           <div className={activeTab === 'tab-3' ? 'block' : 'hidden'}>
-            <div className="p-4">
+            <div className="p-2 sm:p-4">
                 <input 
                   type="text" 
                   inputMode="numeric"
                   placeholder="Enter Numbers" 
                   value={crossDigits} 
+                  disabled={gameDisabled}
                   onChange={e => {
                     const val = e.target.value.replace(/\D/g, '').slice(0, 7);
                     setCrossDigits(val);
                   }} 
-                  className={inputClass}
+                  className={`${inputClass} disabled:opacity-50 disabled:cursor-not-allowed`}
                 />
                 <input 
                   type="text" 
                   inputMode="numeric"
                   placeholder="Amount" 
                   value={crossAmount} 
+                  disabled={gameDisabled}
                   onChange={e => handleNumericInput(e.target.value, setCrossAmount)} 
-                  className={`${inputClass} mt-3`}
+                  className={`${inputClass} mt-3 disabled:opacity-50 disabled:cursor-not-allowed`}
         
                 />
                 
                 <div className="mb-3 mt-3 flex items-center gap-2">
-                  <input type="checkbox" id="cj" checked={crossIncludeJodi} onChange={() => setCrossIncludeJodi(!crossIncludeJodi)} />
-                  <label htmlFor="cj" className="font-bold text-black">with jodi</label>
+                  <input type="checkbox" id="cj" disabled={gameDisabled} checked={crossIncludeJodi} onChange={() => setCrossIncludeJodi(!crossIncludeJodi)} />
+                  <label htmlFor="cj" className="font-bold text-black">with joda</label>
                 </div>
-
-                <button type="button" onClick={generateCrossCombos} className={primaryButtonClass} disabled={bettingClosed}>Generate Crossing</button>
 
                 {crossCombos.length > 0 && (
                   <div className="mt-5 overflow-hidden bg-black">
@@ -446,6 +529,64 @@ function GamePageInner() {
                     </div>
                   </div>
                 )}
+            </div>
+          </div>
+
+          {/* MESSAGE TAB — bulk bet entry */}
+          <div className={activeTab === 'tab-4' ? 'block' : 'hidden'}>
+            <div className="p-4">
+              <div className="mb-3 text-sm font-black uppercase tracking-[0.14em] text-[#111]">Bulk Bet Entry</div>
+              <textarea
+                rows={5}
+                value={messageText}
+                disabled={gameDisabled}
+                onChange={e => setMessageText(e.target.value)}
+                placeholder={gameDisabled ? 'Game Closed' : '...'}
+                className="w-full resize-none border-2 border-[#e0e0e0] bg-white px-4 py-3 text-sm text-[#1a1a1a] outline-none transition focus:border-[#b88422] disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+
+              {messageError && <div className="mt-2 text-xs font-semibold text-[#b91c1c]">{messageError}</div>}
+
+              {/* Format guide */}
+              <div className="mt-3 border border-[#f1e7d3] bg-[#fff8e7] p-3">
+                <div className="mb-1 text-[11px] font-black uppercase tracking-[0.14em] text-[#6b5a3a]">Accepted Formats</div>
+                <div className="space-y-1 text-xs text-[#4a3f2f]">
+                  <p>1️⃣ Single bet: <span className="font-mono font-bold">12=50</span></p>
+                  <p>2️⃣ Multiple bets: <span className="font-mono font-bold">12=50,15=50,88=10</span></p>
+                  <p>3️⃣ Same amount: <span className="font-mono font-bold">12 13 45 34 54 (30)</span></p>
+                </div>
+              </div>
+
+              {/* Preview */}
+              {messageBets.length > 0 && (
+                <div className="mt-4 overflow-hidden bg-black">
+                  <div className="flex justify-between bg-[#b88422] px-5 py-2.5">
+                    <span className="text-xs font-black uppercase tracking-[0.14em] text-[#1f1500]">Preview Bets</span>
+                    <span className="text-xs font-black text-[#1f1500]">{messageBets.length} bets</span>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {messageBets.map((b, i) => (
+                      <div key={i} className="flex justify-between border-b border-[#333] px-5 py-2.5 font-bold text-white">
+                        <span>{b.number}</span>
+                        <span>₹{b.amount}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between bg-[#1a1a1a] px-5 py-3">
+                    <span className="text-sm font-bold text-[#ffd26a]">Total</span>
+                    <span className="text-sm font-bold text-[#ffd26a]">₹{messageBetsTotal}</span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={addMessageBets}
+                disabled={bettingClosed || gameDisabled || messageBets.length === 0}
+                className={`${primaryButtonClass} mt-4`}
+              >
+                {gameDisabled ? 'Game Closed' : 'ADD BETS'}
+              </button>
             </div>
           </div>
         </div>
@@ -493,7 +634,7 @@ function GamePageInner() {
 
         <div className="fixed bottom-0 left-1/2 z-30 flex w-full max-w-107.5 -translate-x-1/2 items-center justify-between border-t border-[#eee] bg-white  shadow-[0_-10px_24px_rgba(15,23,42,0.08)]">
           <div className="bg-black px-5 py-3 font-bold text-white">Total: ₹{getTotal()}</div>
-          <button onClick={placeBet} disabled={loading || bettingClosed} className="bg-black px-7 py-3 font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{bettingClosed ? 'Betting Closed' : (loading ? '...' : 'PLAY')}</button>
+          <button onClick={placeBet} disabled={loading || bettingClosed || gameDisabled} className="bg-black px-7 py-3 font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60">{gameDisabled ? 'Game Closed' : (bettingClosed ? 'Betting Closed' : (loading ? '...' : 'PLAY'))}</button>
       </div>
     </div>
   )

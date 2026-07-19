@@ -11,6 +11,8 @@ import Toast from "../components/Toast";
 import CustomAds from "../components/CustomAds";
 import { betAPI, gameAPI, resultAPI } from "../lib/api";
 import { getSocket, disconnectSocket } from "../lib/socket";
+import { useTranslation } from "../lib/LanguageContext";
+import { translations } from "../lib/translations";
 
 function parseTimeParts(timeValue) {
   const parts = String(timeValue || "")
@@ -63,6 +65,14 @@ function getGameWindow(timeOpen, timeClose, referenceDate = new Date()) {
 }
 
 function getGameAvailability(game, referenceDate = new Date()) {
+  // Check if game is disabled
+  if (game.is_active === 0 || game.is_active === false) {
+    return {
+      canPlay: false,
+      label: "game_closed",
+    };
+  }
+
   const { openTime, closeTime } = getGameWindow(
     game.open_time,
     game.close_time,
@@ -72,20 +82,21 @@ function getGameAvailability(game, referenceDate = new Date()) {
   if (referenceDate < openTime) {
     return {
       canPlay: false,
-      label: `Opens ${openTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })}`,
+      label: `opens_at`,
+      openTime: openTime.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false }),
     };
   }
 
   if (referenceDate >= closeTime) {
     return {
       canPlay: false,
-      label: "Closed",
+      label: "closed",
     };
   }
 
   return {
     canPlay: true,
-    label: "PLAY NOW",
+    label: "play_now",
   };
 }
 
@@ -99,19 +110,19 @@ function LockBadge({ size = "text-base" }) {
   );
 }
 
-const monthOptions = [
-  { value: "1", label: "January" },
-  { value: "2", label: "February" },
-  { value: "3", label: "March" },
-  { value: "4", label: "April" },
-  { value: "5", label: "May" },
-  { value: "6", label: "June" },
-  { value: "7", label: "July" },
-  { value: "8", label: "August" },
-  { value: "9", label: "September" },
-  { value: "10", label: "October" },
-  { value: "11", label: "November" },
-  { value: "12", label: "December" },
+const getMonthOptions = (t) => [
+  { value: "1", label: t(translations.months.january) },
+  { value: "2", label: t(translations.months.february) },
+  { value: "3", label: t(translations.months.march) },
+  { value: "4", label: t(translations.months.april) },
+  { value: "5", label: t(translations.months.may) },
+  { value: "6", label: t(translations.months.june) },
+  { value: "7", label: t(translations.months.july) },
+  { value: "8", label: t(translations.months.august) },
+  { value: "9", label: t(translations.months.september) },
+  { value: "10", label: t(translations.months.october) },
+  { value: "11", label: t(translations.months.november) },
+  { value: "12", label: t(translations.months.december) },
 ];
 
 const titleBarClass =
@@ -120,6 +131,7 @@ const selectClass =
   "min-w-[132px] border border-[#d8c28f] bg-white px-4 py-2 text-xs font-semibold text-[#312200] outline-none transition focus:border-[#b88422]";
 
 const HomePage = () => {
+  const { t, language } = useTranslation();
   const currentYear = new Date().getFullYear();
   // State
   const [games, setGames] = useState([]);
@@ -168,10 +180,7 @@ const HomePage = () => {
       }
     } catch (error) {
       if (!isMounted.current) return;
-      setToast({
-        message: error?.message || "Failed to load games.",
-        type: "error",
-      });
+      console.error('[home] Failed to load games:', error);
       setGames([]);
     } finally {
       if (isMounted.current) setGamesLoading(false);
@@ -187,10 +196,7 @@ const HomePage = () => {
       setLiveResults(Array.isArray(data?.results) ? data.results : []);
     } catch (error) {
       if (!isMounted.current) return;
-      setToast({
-        message: error?.message || "Failed to load live results.",
-        type: "error",
-      });
+      console.error('[home] Failed to load live results:', error);
       setLiveResults([]);
     } finally {
       if (isMounted.current) setResultsLoading(false);
@@ -207,10 +213,7 @@ const HomePage = () => {
         setMonthlyData(response || {});
       } catch (error) {
         if (!isMounted.current) return;
-        setToast({
-          message: error?.message || "Failed to load monthly chart.",
-          type: "error",
-        });
+        console.error('[home] Failed to load monthly chart:', error);
         setMonthlyData({});
       } finally {
         if (isMounted.current) setChartLoading(false);
@@ -228,11 +231,8 @@ const HomePage = () => {
       setRecentWinners(Array.isArray(data?.winners) ? data.winners : []);
     } catch (error) {
       if (!isMounted.current) return;
+      console.error('[home] Failed to load recent winners:', error);
       setRecentWinners([]);
-      setToast({
-        message: error?.message || "Failed to load recent winners.",
-        type: "error",
-      });
     } finally {
       if (isMounted.current) setWinnersLoading(false);
     }
@@ -373,7 +373,7 @@ const HomePage = () => {
         </div>
         {/* Hindi text */}
         <p className="mt-2 text-lg font-semibold text-white">
-          हा भाई यही आती हे सबसे पहले खबर रूको और देखो
+          {t(translations.home.welcomeText)}
         </p>
         {/* Results */}
         <div className="mt-6 space-y-8">
@@ -392,10 +392,14 @@ const HomePage = () => {
                   <p className="mt-2 text-3xl font-bold text-gray-200">
                     {resultItem.result_number}
                   </p>
-                ) : (
+                ) : resultItem.status === 'waiting' ? (
                   <div className="mt-2 text-4xl">
-                    <img src="/images/d.gif" alt="Locked" />
+                    <img src="/images/d.gif" alt="Waiting" />
                   </div>
+                ) : (
+                  <p className="mt-2 text-2xl font-bold text-yellow-400 animate-pulse">
+                    {t(translations.home.awaitingResult)}
+                  </p>
                 )}
                 {/* Time */}
                 <p className="mt-2 text-sm font-semibold text-gray-300">
@@ -447,20 +451,20 @@ const HomePage = () => {
           <div className={titleBarClass}>
             <div className="flex items-center gap-2 text-sm text-white font-bold uppercase tracking-[0.16em]">
               <i className="fa fa-play-circle"></i>
-              <span>In Play</span>
+              <span>{t(translations.home.inPlay)}</span>
             </div>
             <span className="bg-[red] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.2em] text-[#ffffff] rounded-xl">
               <i className="fa fa-plus mr-1"></i>
-              Live
+              {t(translations.home.live)}
             </span>
           </div>
           <div>
             <div className="grid grid-cols-3 gap-2 bg-[#fff8e7] text-[10px] font-black uppercase tracking-widest text-[#674600]">
-              <div className="px-3 py-2 text-center">Yesterday</div>
+              <div className="px-3 py-2 text-center">{t(translations.home.yesterday)}</div>
               <div className="bg-[#111] px-3 py-2 text-center text-[#ffd26a]">
-                Today
+                {t(translations.home.today)}
               </div>
-              <div className="px-3 py-2 text-center">Play Now</div>
+              <div className="px-3 py-2 text-center">{t(translations.home.playNow)}</div>
             </div>
             <div>
               {gamesLoading && (
@@ -478,11 +482,20 @@ const HomePage = () => {
                 </div>
               )}
               {!gamesLoading &&
-                (games ?? []).map((game) => {
+                [...(games ?? [])].sort((a, b) => {
+                  const now = new Date(Date.now() + serverOffsetMs);
+                  const aPlay = getGameAvailability(a, now).canPlay;
+                  const bPlay = getGameAvailability(b, now).canPlay;
+                  if (aPlay !== bPlay) return aPlay ? -1 : 1;
+                  // Within each group, sort by close time ascending
+                  const [ah, am] = (a.close_time || '').split(':').map(Number);
+                  const [bh, bm] = (b.close_time || '').split(':').map(Number);
+                  return (ah * 60 + am) - (bh * 60 + bm);
+                }).map((game) => {
                   const availability = getGameAvailability(game, new Date(Date.now() + serverOffsetMs));
                   return (
                     <div
-                      className="border border-[#efe1c6] bg-[#fffdfa] p-2"
+                      className={`border border-[#efe1c6] bg-[#fffdfa] p-2 ${game.is_active === 0 || game.is_active === false ? 'opacity-60' : ''}`}
                       key={game.id}
                     >
                       <div className="flex items-start gap-3">
@@ -504,12 +517,12 @@ const HomePage = () => {
                             ></span>
                           </div>
                           <div className="mt-2 text-[11px] font-semibold leading-5 text-[#6b5a3a]">
-                            Bet Opening{" "}
+                            {t(translations.home.betOpening)}{" "}
                             <span className="bg-[#fff2cd] px-2 py-1 text-[#2f2410]">
                               {game.open_time?.substring(0, 5)}
                             </span>
                             <span className="mx-1"></span>
-                            Bet Closing{" "}
+                            {t(translations.home.betClosing)}{" "}
                             <span className="bg-[#ffe4e4] px-2 py-1 text-[#6d1f1f]">
                               {game.close_time?.substring(0, 5)}
                             </span>
@@ -518,10 +531,8 @@ const HomePage = () => {
                       </div>
                       <div className="mt-2 grid grid-cols-[1fr_1fr_1.2fr] gap-2">
                         <div className="bg-[#e6f3ff] p-2 text-center text-sm font-black text-[#11446b]">
-                          {/* Overnight: yesterday's result is the latest if today is empty */}
-                          {game.is_overnight && !game.result_number && game.yesterday_result_number
-                            ? game.yesterday_result_number
-                            : game.yesterday_result_number || "-"}
+                          {/* Show last declared result (from prior session if current has none) */}
+                          {game.last_result_number || game.result_number || "-"}
                         </div>
                         <div className="bg-[#ffe8ef] backdrop-blur-[1px] p-2 text-center text-sm font-black text-[#000000]">
                           {/* Show today's result if visible, else lock */}
@@ -537,7 +548,7 @@ const HomePage = () => {
                               href={`/game-page?id=${game.id}&name=${encodeURIComponent(game.name)}`}
                               className="inline-flex w-full items-center justify-center gap-2 text-[#ffd26a]"
                             >
-                              <span>Play Now</span>
+                              <span>{t(translations.home.playNow)}</span>
                               <img
                                 src="/images/play-btn.png"
                                 className="h-4 w-4 object-contain"
@@ -550,7 +561,16 @@ const HomePage = () => {
                                 className="fa fa-lock"
                                 aria-hidden="true"
                               ></i>
-                              <span>{availability.label}</span>
+                              <span>
+                                {availability.label === 'opens_at' 
+                                  ? `${t(translations.home.opensAt)} ${availability.openTime}`
+                                  : availability.label === 'closed'
+                                    ? t(translations.home.closed)
+                                    : availability.label === 'game_closed'
+                                      ? 'GAME CLOSED'
+                                      : availability.label
+                                }
+                              </span>
                             </div>
                           )}
                         </div>
@@ -560,7 +580,7 @@ const HomePage = () => {
                 })}
               {!gamesLoading && (games ?? []).length === 0 && (
                 <p className="py-5 text-center text-sm font-medium text-[#666]">
-                  No games available.
+                  {t(translations.home.noGamesAvailable)}
                 </p>
               )}
             </div>
@@ -578,7 +598,7 @@ const HomePage = () => {
               {/* right angled side */}
               <span className="absolute top-0 -right-1.5 h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-25 sm:-right-2.5"></span>
               <p className="relative z-10 whitespace-nowrap tracking-wide">
-                 KING RECORD CHART
+                {t(translations.home.kingRecordChart)}
               </p>
             </h2>
           </div>
@@ -588,7 +608,7 @@ const HomePage = () => {
               value={selectedMonth}
               onChange={(event) => setSelectedMonth(event.target.value)}
             >
-              {monthOptions.map((month) => (
+              {getMonthOptions(t).map((month) => (
                 <option key={month.value} value={month.value}>
                   {month.label}
                 </option>
@@ -611,7 +631,7 @@ const HomePage = () => {
               onClick={() => loadMonthlyChart(selectedYear, selectedMonth)}
               disabled={chartLoading}
             >
-              Check <span className="arw">→</span>
+              {t(translations.home.check)} <span className="arw">→</span>
             </button>
           </div>
           <MonthlyChart data={monthlyData} gameNames={(games ?? []).map((game) => game.name)} />

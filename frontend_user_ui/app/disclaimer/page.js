@@ -1,8 +1,8 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Disclaimer – REDDYMATKA',
-  description: 'Read the REDDYMATKA Disclaimer regarding accuracy of information, no professional advice, third-party links, and user responsibilities.',
+  title: 'Disclaimer – reddymatka',
+  description: 'Read the reddymatka Disclaimer regarding accuracy of information, no professional advice, third-party links, and user responsibilities.',
 }
 
 export default function Disclaimer() {
@@ -23,7 +23,7 @@ export default function Disclaimer() {
           {/* Warning banner */}
           <div className="border-l-4 border-[#c8960c] bg-[#fff9ee] px-4 py-3">
             <p className="text-sm font-semibold leading-relaxed text-[#7a5500]">
-              REDDYMATKA is for informational and entertainment purposes only. We do not promote or support gambling in any form. Gambling may be illegal in your country or region. Please check and follow your local laws before accessing this site. REDDYMATKA is not responsible for any loss or damage arising from the use of this information.
+              reddymatka is for informational and entertainment purposes only. We do not promote or support gambling in any form. Gambling may be illegal in your country or region. Please check and follow your local laws before accessing this site. reddymatka is not responsible for any loss or damage arising from the use of this information.
             </p>
           </div>
 
@@ -164,13 +164,13 @@ export default function Disclaimer() {
             <div className="space-y-1">
               <p className="flex items-center gap-2 text-sm">
                 <span>📧</span>
-                <a href="mailto:support@REDDYMATKA.com" className="font-semibold text-[#c8960c] underline underline-offset-2">
-                  support@REDDYMATKA.com
+                <a href="mailto:support@reddymatka.com" className="font-semibold text-[#c8960c] underline underline-offset-2">
+                  support@reddymatka.com
                 </a>
               </p>
               <p className="flex items-center gap-2 text-sm">
                 <span>🌐</span>
-                <span className="font-semibold text-[#c8960c]">https://www.REDDYMATKA.com</span>
+                <span className="font-semibold text-[#c8960c]">https://www.reddymatka.com</span>
               </p>
             </div>
           </section>

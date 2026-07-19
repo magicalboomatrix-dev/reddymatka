@@ -8,17 +8,27 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Token is no longer stored in localStorage (HttpOnly cookie handles auth).
-    // Only the user object is persisted for UI display.
-    const savedUser = localStorage.getItem('admin_user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch {
+    // Verify the actual server session (HttpOnly cookie) on every mount.
+    // This prevents stale localStorage data from granting access when the
+    // cookie has expired, been replaced by a user-role token, or been cleared.
+    api.get('/auth/me')
+      .then((res) => {
+        const u = res.data.user;
+        if (u.role === 'admin' || u.role === 'moderator') {
+          localStorage.setItem('admin_user', JSON.stringify(u));
+          setUser(u);
+        } else {
+          // Cookie belongs to a regular user — force re-login
+          localStorage.removeItem('admin_user');
+          setUser(null);
+        }
+      })
+      .catch(() => {
+        // 401/403 or network error — clear any stale state
         localStorage.removeItem('admin_user');
-      }
-    }
-    setLoading(false);
+        setUser(null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = async (phone, password) => {

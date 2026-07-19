@@ -21,7 +21,9 @@ import type { NextRequest } from 'next/server';
  *     and there is no build-time hash extraction configured.
  */
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? '').replace('/api', '');
+const API_ORIGIN =
+  (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/api$/, '') ||
+  'https://api.reddymatka.com';
 
 function buildCsp(nonce: string, isDev: boolean): string {
   const scriptSrc = isDev
@@ -32,11 +34,13 @@ function buildCsp(nonce: string, isDev: boolean): string {
 
   return [
     "default-src 'self'",
-    `connect-src 'self' ${API_URL} wss: ws:`,
+    `connect-src 'self' ${API_ORIGIN} wss://${new URL(API_ORIGIN).hostname} ws:`,
+    `upgrade-insecure-requests`,
     scriptSrc,
     "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
     "font-src 'self' https://cdnjs.cloudflare.com",
     "img-src 'self' data: blob: https:",
+    `media-src 'self' ${API_ORIGIN} blob:`,
     "frame-ancestors 'none'",
   ].join('; ');
 }

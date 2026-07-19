@@ -1,8 +1,8 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Privacy Policy – REDDYMATKA',
-  description: 'Read the Privacy Policy for REDDYMATKA.com to understand how we collect, use, and protect your personal information.',
+  title: 'Privacy Policy – reddymatka',
+  description: 'Read the Privacy Policy for reddymatka.com to understand how we collect, use, and protect your personal information.',
 }
 
 export default function PrivacyPolicy() {
@@ -198,8 +198,8 @@ export default function PrivacyPolicy() {
             </ul>
             <p className="text-sm leading-relaxed">
               You may exercise these rights by contacting us at{' '}
-              <a href="mailto:support@REDDYMATKA.com" className="font-semibold text-[#c8960c] underline underline-offset-2">
-                support@REDDYMATKA.com
+              <a href="mailto:support@reddymatka.com" className="font-semibold text-[#c8960c] underline underline-offset-2">
+                support@reddymatka.com
               </a>
               .
             </p>
@@ -238,13 +238,13 @@ export default function PrivacyPolicy() {
             <div className="space-y-1">
               <p className="flex items-center gap-2 text-sm">
                 <span>📧</span>
-                <a href="mailto:support@REDDYMATKA.com" className="font-semibold text-[#c8960c] underline underline-offset-2">
-                  support@REDDYMATKA.com
+                <a href="mailto:support@reddymatka.com" className="font-semibold text-[#c8960c] underline underline-offset-2">
+                  support@reddymatka.com
                 </a>
               </p>
               <p className="flex items-center gap-2 text-sm">
                 <span>🌐</span>
-                <span className="font-semibold text-[#c8960c]">https://www.REDDYMATKA.com</span>
+                <span className="font-semibold text-[#c8960c]">https://www.reddymatka.com</span>
               </p>
             </div>
           </section>

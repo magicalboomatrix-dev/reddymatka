@@ -16,19 +16,23 @@ const depositRoutes = require('./routes/deposit.routes');
 const withdrawRoutes = require('./routes/withdraw.routes');
 const bonusRoutes = require('./routes/bonus.routes');
 const resultRoutes = require('./routes/result.routes');
-const analyticsRoutes = require('./routes/analytics.routes');
+const jantriRoutes = require('./routes/jantri.routes');
 const moderatorRoutes = require('./routes/moderator.routes');
 const moderatorSelfRoutes = require('./routes/moderator-self.routes');
 const adminRoutes = require('./routes/admin.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const customAdsRoutes = require('./routes/home-banner.routes');
 const telegramRoutes = require('./routes/telegram.routes');
+const smsWebhookRoutes = require('./routes/sms-webhook.routes');
 const autoDepositRoutes = require('./routes/auto-deposit.routes');
 const settlementMonitorRoutes = require('./routes/settlement-monitor.routes');
 const walletAuditRoutes = require('./routes/wallet-audit.routes');
+const howToPlayRoutes = require('./routes/how-to-play.routes');
+const supportRoutes = require('./routes/support.routes');
 
 const { errorHandler } = require('./middleware/error.middleware');
 const { expirePendingOrders } = require('./services/auto-deposit-matcher');
+const { startRetryWorker } = require('./services/auto-deposit-retry');
 // Settlement worker runs as a SEPARATE process (src/worker.js).
 // Do NOT import or start auto-settle here — it causes duplicate processing
 // when multiple HTTP server instances are deployed.
@@ -50,16 +54,19 @@ const routeRegistrations = [
   ['/api/withdraw', withdrawRoutes],
   ['/api/bonus', bonusRoutes],
   ['/api/results', resultRoutes],
-  ['/api/analytics', analyticsRoutes],
+  ['/api/jantri', jantriRoutes],
   ['/api/moderators', moderatorRoutes],
   ['/api/moderator', moderatorSelfRoutes],
   ['/api/admin', adminRoutes],
   ['/api/notifications', notificationRoutes],
   ['/api/custom-ads', customAdsRoutes],
   ['/api/telegram', telegramRoutes],
+  ['/api/sms', smsWebhookRoutes],
   ['/api/auto-deposit', autoDepositRoutes],
   ['/api/settlement-monitor', settlementMonitorRoutes],
   ['/api/wallet-audit', walletAuditRoutes],
+  ['/api/how-to-play', howToPlayRoutes],
+  ['/api/support', supportRoutes],
 ];
 
 function createRateLimiter({ windowMs, max, message }) {
@@ -119,7 +126,9 @@ app.use(cors({
       return callback(null, true);
     }
 
-    return callback(new Error('Not allowed by CORS'));
+    const corsErr = new Error('Not allowed by CORS');
+    corsErr.statusCode = 403;
+    return callback(corsErr);
   },
   credentials: true
 }));
@@ -131,15 +140,23 @@ const authLimiter = createRateLimiter({
 });
 app.use('/api/auth', authLimiter);
 
-// Stricter rate limits for financial endpoints (per IP)
+// Stricter rate limits for financial endpoints (keyed by authenticated user ID, fallback IP)
 const financialLimiter = createRateLimiter({
   windowMs: 15 * 60 * 1000,
-  max: 30,
+  max: 60,
   message: { error: 'Too many requests. Please try again later.' },
 });
 app.use('/api/withdraw', financialLimiter);
-app.use('/api/auto-deposit', financialLimiter);
 app.use('/api/bets', financialLimiter);
+// Auto-deposit: only rate-limit mutating actions (order creation / cancellation).
+// Status checks and history reads are excluded so polling doesn't trigger 429s.
+app.use('/api/auto-deposit/order', (req, res, next) => {
+  // GET /order/status/:id — read-only, skip limiter
+  if (req.method === 'GET') return next();
+  return financialLimiter(req, res, next);
+});
+app.use('/api/auto-deposit/orders', (req, res, next) => next()); // history read — skip
+app.use('/api/auto-deposit/admin', (req, res, next) => next()); // admin routes — skip
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -203,6 +220,9 @@ httpServer.listen(PORT, () => {
       logger.error('auto-deposit', 'Order expiry error', err);
     }
   }, PENDING_ORDER_EXPIRY_INTERVAL_MS);
+
+  // Start auto-deposit retry worker (re-matches unmatched webhook transactions every 15s)
+  startRetryWorker();
 });
 
 module.exports = { app, httpServer };

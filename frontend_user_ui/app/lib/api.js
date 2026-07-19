@@ -1,4 +1,15 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api';
+const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, '');
+
+export function buildUploadUrl(fileName) {
+  if (!fileName) return '';
+  const normalizedPath = fileName.startsWith('/') ? fileName : `/uploads/${fileName}`;
+  let baseUrl = BACKEND_BASE;
+  if (baseUrl && !baseUrl.startsWith('http') && !baseUrl.startsWith('//') && !baseUrl.startsWith('/')) {
+    baseUrl = `https://${baseUrl}`;
+  }
+  return `${baseUrl}${normalizedPath}`;
+}
 
 function buildQuery(params = {}) {
   const searchParams = new URLSearchParams();
@@ -24,25 +35,34 @@ async function request(endpoint, options = {}) {
   // Authentication is handled exclusively via the HttpOnly `token` cookie
   // sent automatically by credentials:'include'. No localStorage token read.
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: 'include', // always send HttpOnly cookie
-  });
+  try {
+    const res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      credentials: 'include', // always send HttpOnly cookie
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  if (!res.ok) {
-    if (res.status === 401) {
-      localStorage.removeItem('user');
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+    if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem('user');
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
+      throw new Error(data.error || 'Request failed');
     }
-    throw new Error(data.error || 'Request failed');
-  }
 
-  return data;
+    return data;
+  } catch (error) {
+    // Handle network/fetch errors gracefully
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Unable to connect to server. Please check your internet connection.');
+    }
+    // Re-throw other errors (like the ones we created above)
+    throw error;
+  }
 }
 
 // Auth
@@ -113,7 +133,7 @@ export const autoDepositAPI = {
 
 // Withdrawals
 export const withdrawAPI = {
-  request: (data) => request('/withdraw/request', { method: 'POST', body: JSON.stringify(data) }),
+  request: (data) => request('/withdraw/request', { method: 'POST', body: data instanceof FormData ? data : JSON.stringify(data) }),
   history: (params) => request(`/withdraw/history${buildQuery(params)}`),
 };
 
@@ -139,5 +159,14 @@ export const customAdsAPI = {
 // Notifications
 export const notificationAPI = {
   my: () => request('/notifications/my'),
+  recent: () => request('/notifications/recent'),
   markRead: (id) => request(`/notifications/${id}/read`, { method: 'PUT' }),
+};
+
+// Support
+export const supportAPI = {
+  createTicket: (data) => request('/support/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  myTickets: (params) => request(`/support/tickets/my${buildQuery(params)}`),
+  getTicket: (id) => request(`/support/tickets/${id}`),
+  addMessage: (id, message) => request(`/support/tickets/${id}/messages`, { method: 'POST', body: JSON.stringify({ message }) }),
 };

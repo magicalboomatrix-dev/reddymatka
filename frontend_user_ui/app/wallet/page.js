@@ -7,12 +7,15 @@ import { betAPI, userAPI, walletAPI } from '../lib/api';
 import { formatEnumLabel, formatStatusLabel } from '../lib/formatters';
 import { useEffect, useState } from 'react';
 import { getSocket, disconnectSocket } from '../lib/socket';
+import { useTranslation } from '../lib/LanguageContext';
+import { translations } from '../lib/translations';
 
 function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
 
 export default function WalletPage() {
+  const { t } = useTranslation();
   const [wallet, setWallet] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -28,6 +31,7 @@ export default function WalletPage() {
   const formatDateTime = (value) => {
     if (!value) return '-';
     return new Date(value).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
       day: '2-digit',
       month: 'short',
       year: 'numeric',
@@ -218,8 +222,8 @@ export default function WalletPage() {
       <div className="mx-auto w-full max-w-107.5">
            <section className="mb-1 overflow-hidden border border-[#1a1206] bg-[#050505]">
           <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)]  text-center text-[#111]">
-            <h1 className="text-lg font-bold uppercase tracking-[0.14em]">Wallet</h1>
-            <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4d2f00]">Deposit and withdraw from one quick hub</p>
+            <h1 className="text-lg font-bold uppercase tracking-[0.14em]">{t(translations.footer.wallet)}</h1>
+            <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4d2f00]">{t(translations.wallet.depositFunds)} / {t(translations.wallet.withdrawFunds)}</p>
           </div>
 <div className="relative overflow-hidden text-white">
   <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(235,218,141,0.18),transparent_42%),radial-gradient(circle_at_bottom_left,rgba(255,0,0,0.12),transparent_34%)]" />
@@ -229,7 +233,7 @@ export default function WalletPage() {
     {/* Main Balance */}
     <div className="flex flex-col items-center justify-center border border-white/10 bg-white/6 backdrop-blur-sm p-3">
       <div className="text-[10px] uppercase tracking-[0.14em] text-white/60">
-        Main Balance
+        {t(translations.wallet.totalBalance)}
       </div>
 
       <div className="mt-2 text-[28px] font-bold leading-none text-[#ebda8d]">
@@ -240,7 +244,7 @@ export default function WalletPage() {
     {/* Bonus Wallet */}
     <div className="flex flex-col items-center justify-center border border-white/10 bg-white/6 backdrop-blur-sm p-3">
       <div className="text-[10px] uppercase tracking-[0.14em] text-white/60">
-        Bonus Wallet
+        {t(translations.header.bonus)}
       </div>
 
       <div className="mt-2 text-[28px] font-bold leading-none text-[#7df48f]">
@@ -252,6 +256,8 @@ export default function WalletPage() {
 </div>
         </section>
 
+
+
          <section className="flex justify-center gap-2 max-w-md mx-auto">
 
   {/* Deposit */}
@@ -261,7 +267,7 @@ export default function WalletPage() {
   >
     <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] py-2 text-[#111] text-center">
       <div className="text-xs font-bold uppercase tracking-[0.12em]">
-        Add Money
+        {t(translations.depositWithdraw.deposit)}
       </div>
     </div>
 
@@ -276,14 +282,14 @@ export default function WalletPage() {
       </div>
 
       <div>
-        <h2 className="text-base font-bold text-[#111]">Deposit</h2>
+        <h2 className="text-base font-bold text-[#111]">{t(translations.depositWithdraw.deposit)}</h2>
         <p className="mt-1 text-xs text-[#6d6659]">
-          Submit UTR and track approval.
+          {t(translations.deposit.title)}
         </p>
       </div>
 
       <div className="text-xs font-semibold text-[#a32020] group-hover:text-[#7a1010]">
-        Go to deposit
+        {t(translations.deposit.proceed)}
       </div>
 
     </div>
@@ -297,7 +303,7 @@ export default function WalletPage() {
   >
     <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] py-2 text-[#111] text-center">
       <div className="text-xs font-bold uppercase tracking-[0.12em]">
-        Cash Out
+        {t(translations.withdraw.title)}
       </div>
     </div>
 
@@ -312,14 +318,14 @@ export default function WalletPage() {
       </div>
 
       <div>
-        <h2 className="text-base font-bold text-[#111]">Withdraw</h2>
+        <h2 className="text-base font-bold text-[#111]">{t(translations.depositWithdraw.withdraw)}</h2>
         <p className="mt-1 text-xs text-[#6d6659]">
-          Request payout to saved bank.
+          {t(translations.withdraw.processingTime)}
         </p>
       </div>
 
       <div className="text-xs font-semibold text-[#a32020] group-hover:text-[#7a1010]">
-        Go to withdraw
+        {t(translations.withdraw.requestWithdraw)}
       </div>
 
     </div>
@@ -327,7 +333,7 @@ export default function WalletPage() {
 
 </section>
         <section className="mb-1 border border-[#d6b774] bg-white p-3 shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
-          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6d4a08]">Today Summary</div>
+          <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#6d4a08]">{t(translations.myBets.dateRange)}</div>
           {loading ? (
             <div className="mt-2 space-y-2">
               {[1, 2, 3].map((item) => <SkeletonBlock key={item} className="h-4 w-full" />)}
@@ -336,20 +342,20 @@ export default function WalletPage() {
             <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                
               <div className="border border-[#ead8ab] bg-[#fff8e7] px-3 py-2">
-                <div className="text-[#6b5a3a]">Today's Bets</div>
+                <div className="text-[#6b5a3a]">{t(translations.myBets.title)}</div>
                 <div className="font-black text-[#111]">{formatCurrency(todaySummary.totalBets)}</div>
               </div>
               <div className="border border-[#ead8ab] bg-[#fff8e7] px-3 py-2">
-                <div className="text-[#6b5a3a]">Today's Wins</div>
+                <div className="text-[#6b5a3a]">{t(translations.myBets.winAmount)}</div>
                 <div className="font-black text-[#1a7f3c]">{formatCurrency(todaySummary.totalWins)}</div>
               </div>
               <div className="border border-[#ead8ab] bg-[#fff8e7] px-3 py-2">
-                <div className="text-[#6b5a3a]">Today's Profit</div>
+                <div className="text-[#6b5a3a]">{t(translations.profitLoss.netAmount)}</div>
                 <div className={`font-black ${todaySummary.profit >= 0 ? 'text-[#1a7f3c]' : 'text-[#b91c1c]'}`}>{formatCurrency(todaySummary.profit)}</div>
               </div>
               <div className="col-span-3 border border-[#ead8ab] bg-[#fff8e7] px-3 py-2">
-                <div className="text-[#6b5a3a]">Note</div>
-                <div className="font-semibold text-[#111]">Bonus wallet is not withdrawable. Only main wallet balance can be withdrawn.</div>
+                <div className="text-[#6b5a3a]">{t(translations.common.note)}</div>
+                <div className="font-semibold text-[#111]">{t(translations.wallet.bonus)} {t(translations.withdraw.title)}. {t(translations.wallet.totalBalance)}.</div>
               </div>
             </div>
           )}
@@ -367,12 +373,12 @@ export default function WalletPage() {
 
         <section className="mt-4 border border-[#d6b774] bg-white p-3 shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
           <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-3 py-2 text-center text-[#111]">
-            <h2 className="text-sm font-bold uppercase tracking-widest">Wallet Transaction History</h2>
+            <h2 className="text-sm font-bold uppercase tracking-widest">{t(translations.wallet.transactionHistory)}</h2>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-semibold text-[#111]">From Date</label>
+              <label className="block text-xs font-semibold text-[#111]">{t(translations.profitLoss.dateRange)} {t(translations.common.from)}</label>
               <input
                 className="mt-1 h-9 w-full border border-[#d8d1c4] bg-[#faf7f0] px-3 text-sm"
                 type="date"
@@ -381,7 +387,7 @@ export default function WalletPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-[#111]">To Date</label>
+              <label className="block text-xs font-semibold text-[#111]">{t(translations.profitLoss.dateRange)} {t(translations.common.to)}</label>
               <input
                 className="mt-1 h-9 w-full border border-[#d8d1c4] bg-[#faf7f0] px-3 text-sm"
                 type="date"
@@ -397,7 +403,7 @@ export default function WalletPage() {
             onClick={fetchTransactions}
             disabled={loadingTransactions}
           >
-            {loadingTransactions ? 'Loading...' : 'Apply Filters'}
+            {loadingTransactions ? t(translations.common.loading) : t(translations.common.apply)}
           </button>
 
           {transactionsError && (
@@ -432,24 +438,24 @@ export default function WalletPage() {
 
                       <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
                         <div>
-                          <div className="text-[#6b5a3a]">Amount</div>
+                          <div className="text-[#6b5a3a]">{t(translations.accountStatement.amount)}</div>
                           <div className={`font-bold ${amountValue >= 0 ? 'text-[#1a7f3c]' : 'text-[#b91c1c]'}`}>{formatAmount(transaction.amount)}</div>
                         </div>
                         <div>
-                          <div className="text-[#6b5a3a]">Balance After</div>
+                          <div className="text-[#6b5a3a]">{t(translations.accountStatement.balance)}</div>
                           <div className="font-bold text-[#111]">{formatCurrency(balanceAfterValue)}</div>
                         </div>
                       </div>
 
-                      <div className="mt-2 text-xs text-[#111]">Remark: {formatTransactionRemark(transaction.remark || transaction.description)}</div>
-                      <div className="mt-1 text-[11px] text-[#6b5a3a]">Reference: {formatReference(transaction.reference_type, transaction.reference_id)}</div>
+                      <div className="mt-2 text-xs text-[#111]">{t(translations.accountStatement.description)}: {formatTransactionRemark(transaction.remark || transaction.description)}</div>
+                      <div className="mt-1 text-[11px] text-[#6b5a3a]">{t(translations.common.reference)}: {formatReference(transaction.reference_type, transaction.reference_id)}</div>
                     </div>
                   );
                 })}
 
                 {transactions.length === 0 && (
                   <div className="border border-[#ead8ab] bg-[#fffdf7] px-3 py-6 text-center text-sm text-[#6b5a3a]">
-                    No wallet transactions found for selected dates.
+                    {t(translations.accountStatement.noTransactions)}
                   </div>
                 )}
               </>

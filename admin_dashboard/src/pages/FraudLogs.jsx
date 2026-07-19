@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../utils/api';
 
 export default function FraudLogs() {
@@ -81,7 +81,7 @@ export default function FraudLogs() {
           {alerts?.large_new_user_deposits?.map((item) => (
             <div key={item.id} className=" border border-purple-200 bg-purple-50 px-4 py-3">
               <p className="text-sm font-medium text-gray-800">{item.user_name} ({item.user_phone}) deposited ₹{Number(item.amount).toLocaleString('en-IN')}</p>
-              <p className="text-xs text-gray-500 mt-1">Account age: {item.account_age_hours} hours • {new Date(item.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
+              <p className="text-xs text-gray-500 mt-1">Account age: {item.account_age_hours} hours � {new Date(item.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
             </div>
           ))}
           {!alerts?.large_new_user_deposits?.length && <div className="text-sm text-gray-400">No large new-user deposit alerts.</div>}

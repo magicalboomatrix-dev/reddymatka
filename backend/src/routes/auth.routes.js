@@ -27,5 +27,6 @@ router.post('/reset-mpin', authController.resetMpin);
 router.post('/login-mpin', authController.loginMpin);
 router.post('/admin-login', authController.adminLogin);
 router.post('/logout', authController.logout);
+router.get('/me', authenticate, authController.getMe);
 
 module.exports = router;

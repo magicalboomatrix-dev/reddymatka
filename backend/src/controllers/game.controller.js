@@ -1,5 +1,5 @@
 const pool = require('../config/database');
-const { settleBetsForGame } = require('../utils/settle-bets');
+const { settleBetsForGame, reverseSettlement } = require('../utils/settle-bets');
 const { enqueueSettlement } = require('../utils/auto-settle');
 const eventBus = require('../utils/event-bus');
 const redis = require('../services/redis.service');
@@ -22,25 +22,48 @@ exports.listGames = async (req, res, next) => {
         WHERE status = 'pending'
         GROUP BY game_id
       ) pb ON pb.game_id = g.id
-      WHERE g.is_active = 1
-      ORDER BY g.open_time
+      ORDER BY g.is_active DESC, g.open_time
     `);
 
-    const now = new Date();
-    const priorNow = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    // Fetch pending bets grouped by session date for each game
+    const gameIds = games.map(g => g.id);
+    let pendingByDate = [];
+    if (gameIds.length > 0) {
+      const [rows] = await pool.query(`
+        SELECT game_id, session_date, COUNT(*) as count
+        FROM bets
+        WHERE status = 'pending' AND game_id IN (?)
+        GROUP BY game_id, session_date
+        ORDER BY session_date DESC
+      `, [gameIds]);
+      pendingByDate = rows;
+    }
 
-    // Compute required result dates for every game (no DB queries yet)
+    // Group pending bets by game_id
+    const pendingByGame = {};
+    for (const row of pendingByDate) {
+      if (!pendingByGame[row.game_id]) {
+        pendingByGame[row.game_id] = [];
+      }
+      pendingByGame[row.game_id].push({
+        session_date: row.session_date,
+        count: row.count
+      });
+    }
+
+    const now = new Date();
+
+    // For each game, compute the current session's result_date (= close date).
     const gameDateMap = games.map((g) => ({
       id: g.id,
-      today: getResultDate(g, now),
-      yesterday: getResultDate(g, priorNow),
+      currentSessionDate: getResultDate(g, now),
     }));
 
-    // Single batch query instead of 2×N individual queries
+    // Single batch query for current session results
     let batchResults = [];
     if (games.length > 0) {
       const gameIds = gameDateMap.map((d) => d.id);
-      const allDates = [...new Set(gameDateMap.flatMap((d) => [d.today, d.yesterday]))];
+      const allDates = [...new Set(gameDateMap.map((d) => d.currentSessionDate))];
       const [rows] = await pool.query(
         `SELECT game_id, result_number, DATE_FORMAT(result_date, '%Y-%m-%d') AS result_date,
                 declared_at, is_settled
@@ -51,31 +74,61 @@ exports.listGames = async (req, res, next) => {
       batchResults = rows;
     }
 
-    // Build lookup map: "gameId:YYYY-MM-DD" → first matching result row
+    // Also fetch the most recent declared result per game (for showing last result if current session has none)
+    let recentResults = [];
+    if (games.length > 0) {
+      const gameIds = gameDateMap.map((d) => d.id);
+      const [rows] = await pool.query(
+        `SELECT gr.game_id, gr.result_number, DATE_FORMAT(gr.result_date, '%Y-%m-%d') AS result_date,
+                gr.declared_at, gr.is_settled
+         FROM game_results gr
+         INNER JOIN (
+           SELECT game_id, MAX(result_date) AS max_date
+           FROM game_results
+           WHERE game_id IN (?) AND declared_at IS NOT NULL
+           GROUP BY game_id
+         ) latest ON gr.game_id = latest.game_id AND gr.result_date = latest.max_date
+         WHERE gr.game_id IN (?) AND gr.declared_at IS NOT NULL`,
+        [gameIds, gameIds]
+      );
+      recentResults = rows;
+    }
+
+    // Build lookup maps
     const resultMap = {};
     for (const row of batchResults) {
       const key = `${row.game_id}:${row.result_date}`;
       if (!resultMap[key]) resultMap[key] = row;
     }
 
+    const recentMap = {};
+    for (const row of recentResults) {
+      if (!recentMap[row.game_id]) recentMap[row.game_id] = row;
+    }
+
     for (const g of games) {
-      const { today: resultDateToday, yesterday: resultDateYesterday } =
-        gameDateMap.find((d) => d.id === g.id);
+      const { currentSessionDate } = gameDateMap.find((d) => d.id === g.id);
 
-      const todayResult = resultMap[`${g.id}:${resultDateToday}`] || null;
-      const yesterdayResult = resultMap[`${g.id}:${resultDateYesterday}`] || null;
+      const currentResult = resultMap[`${g.id}:${currentSessionDate}`] || null;
+      const lastResult = recentMap[g.id] || null;
 
-      g.result_number = todayResult ? todayResult.result_number : null;
-      g.result_date = todayResult ? todayResult.result_date : null;
-      g.declared_at = todayResult ? todayResult.declared_at : null;
-      g.is_result_settled = todayResult ? !!todayResult.is_settled : null;
-      g.result_visible = todayResult ? isResultVisible(g, resultDateToday, now) : false;
+      // Current session info
+      g.result_number = currentResult ? currentResult.result_number : null;
+      g.result_date = currentResult ? currentResult.result_date : currentSessionDate;
+      g.declared_at = currentResult ? currentResult.declared_at : null;
+      g.is_result_settled = currentResult ? !!currentResult.is_settled : null;
+      g.result_visible = currentResult ? isResultVisible(g, currentSessionDate, now) : false;
+      g.current_session_date = currentSessionDate;
 
-      g.yesterday_result_number = yesterdayResult ? yesterdayResult.result_number : null;
-      g.yesterday_result_date = yesterdayResult ? yesterdayResult.result_date : null;
-      g.is_yesterday_result_settled = yesterdayResult ? !!yesterdayResult.is_settled : null;
+      // Last declared result (may be from a prior session)
+      g.last_result_number = lastResult ? lastResult.result_number : null;
+      g.last_result_date = lastResult ? lastResult.result_date : null;
+      g.is_last_result_settled = lastResult ? !!lastResult.is_settled : null;
 
       g.is_overnight = isOvernightGame(g);
+
+      // Add pending bets grouped by session date
+      g.pending_by_date = pendingByGame[g.id] || [];
     }
 
     res.json({ games, server_now: new Date().toISOString() });
@@ -200,10 +253,14 @@ exports.declareResult = async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
     const { id } = req.params;
-    const { result_number } = req.body;
+    const { result_number, result_date: adminDate } = req.body;
 
     if (!result_number) {
       return res.status(400).json({ error: 'Result number is required.' });
+    }
+
+    if (!adminDate || !/^\d{4}-\d{2}-\d{2}$/.test(adminDate)) {
+      return res.status(400).json({ error: 'A valid result_date (YYYY-MM-DD) is required.' });
     }
 
     // Validate result_number is a 2-digit number (00-99)
@@ -220,9 +277,9 @@ exports.declareResult = async (req, res, next) => {
     const game = gameRows[0];
     const now = new Date();
 
-    // Auto-compute result_date = DATE(close_time) for the current session.
-    // Never trust the client for this — it must always be derived from game timing.
-    const result_date = getResultDate(game, now);
+    // CORE RULE: result_date comes from the admin's selection — never computed from "now".
+    // This ensures late declarations still land on the correct session.
+    const result_date = adminDate;
 
     // Use game-time utilities to determine if settlement can proceed
     const settleAllowed = canSettleGame(game, result_date, now);
@@ -231,20 +288,25 @@ exports.declareResult = async (req, res, next) => {
 
     // Insert or update result — declared_at = actual current time
     const [existing] = await conn.query(
-      'SELECT id, is_settled FROM game_results WHERE game_id = ? AND result_date = ?',
+      'SELECT id, is_settled, result_number FROM game_results WHERE game_id = ? AND result_date = ?',
       [id, result_date]
     );
 
     let resultId;
     if (existing.length > 0) {
       resultId = existing[0].id;
-      // Allow re-declaration only if not yet settled
-      if (existing[0].is_settled) {
+      const isRevision = existing[0].is_settled && existing[0].result_number !== resultStr;
+
+      if (isRevision) {
+        await reverseSettlement(conn, resultId);
+        await conn.query('DELETE FROM settlement_queue WHERE game_result_id = ?', [resultId]);
+      } else if (existing[0].is_settled) {
         await conn.rollback();
-        return res.status(409).json({ error: 'Result already settled. Cannot re-declare.' });
+        return res.status(409).json({ error: 'Result already settled with the same number.' });
       }
+
       await conn.query(
-        'UPDATE game_results SET result_number = ?, declared_at = NOW() WHERE id = ?',
+        'UPDATE game_results SET result_number = ?, declared_at = NOW(), is_settled = 0 WHERE id = ?',
         [resultStr, resultId]
       );
     } else {
@@ -328,52 +390,41 @@ exports.settleBets = async (req, res, next) => {
     const game = games[0];
     const now = new Date();
 
-    // Current session result_date = DATE(close_time) for right now.
-    const resultDateStr = getResultDate(game, now);
-
-    // Prior session result_date = what getResultDate returns 24 h ago.
-    // Using a 24 h shift handles overnight games correctly: an overnight game
-    // that closes at 05:30 will, when queried at 20:00, give tomorrow as the
-    // current session; going back 24 h gives today, which is the prior session.
-    const priorNow = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const priorDateStr = getResultDate(game, priorNow);
-
-    // Deduplicate in case both resolve to the same date (normal same-day games).
-    const datesToCheck = [...new Set([resultDateStr, priorDateStr])];
-
+    // Find all unsettled results for this game and settle them.
+    // This avoids the fragile "compute result_date from now" approach —
+    // we simply look for any declared-but-unsettled results directly.
     await conn.beginTransaction();
     let settledCount = 0;
     let missingResultDates = 0;
 
-    for (const checkDate of datesToCheck) {
+    const [unsettledResults] = await conn.query(
+      `SELECT id, result_number, DATE_FORMAT(result_date, '%Y-%m-%d') AS result_date
+       FROM game_results
+       WHERE game_id = ? AND is_settled = 0 AND declared_at IS NOT NULL
+       ORDER BY result_date DESC
+       LIMIT 5`,
+      [id]
+    );
+
+    if (unsettledResults.length === 0) {
+      // Check if there are pending bets with no result at all
+      const [[{ cnt }]] = await conn.query(
+        "SELECT COUNT(*) as cnt FROM bets WHERE game_id = ? AND status = 'pending'",
+        [id]
+      );
+      if (cnt > 0) missingResultDates++;
+    }
+
+    for (const result of unsettledResults) {
+      const checkDate = result.result_date;
+
       // Check if close_datetime has passed for this date
       if (!canSettleGame(game, checkDate, now)) {
         continue;
       }
 
-      const [results] = await conn.query(
-        `SELECT id, result_number, is_settled
-         FROM game_results
-         WHERE game_id = ? AND result_date = ? AND declared_at IS NOT NULL
-         LIMIT 1`,
-        [id, checkDate]
-      );
-
-      if (results.length === 0) {
-        // Check if there are pending bets for this session
-        const [[{ cnt }]] = await conn.query(
-          'SELECT COUNT(*) as cnt FROM bets WHERE game_id = ? AND COALESCE(session_date, DATE(created_at)) = ? AND status = ?',
-          [id, checkDate, 'pending']
-        );
-        if (cnt > 0) missingResultDates++;
-        continue;
-      }
-
-      // Skip already-settled results
-      if (results[0].is_settled) continue;
-
-      const resultId = results[0].id;
-      const resultStr = results[0].result_number.toString().padStart(2, '0');
+      const resultId = result.id;
+      const resultStr = result.result_number.toString().padStart(2, '0');
 
       // Lock the result row to prevent concurrent settlement
       const [locked] = await conn.query(
@@ -414,5 +465,56 @@ exports.settleBets = async (req, res, next) => {
     next(error);
   } finally {
     conn.release();
+  }
+};
+
+// Get pending bets for a game, optionally filtered by session date
+exports.getPendingBets = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { session_date } = req.query;
+
+    const [games] = await pool.query('SELECT * FROM games WHERE id = ?', [id]);
+    if (games.length === 0) {
+      return res.status(404).json({ error: 'Game not found.' });
+    }
+
+    let query = `
+      SELECT b.id, b.user_id, b.type, b.total_amount, b.session_date, b.created_at,
+             u.name as user_name, u.phone as user_phone,
+             GROUP_CONCAT(CONCAT(bn.number, ':', bn.amount) SEPARATOR ', ') as numbers
+      FROM bets b
+      JOIN users u ON u.id = b.user_id
+      LEFT JOIN bet_numbers bn ON bn.bet_id = b.id
+      WHERE b.game_id = ? AND b.status = 'pending'
+    `;
+    const params = [id];
+
+    if (session_date) {
+      query += ' AND b.session_date = ?';
+      params.push(session_date);
+    }
+
+    query += ' GROUP BY b.id ORDER BY b.session_date DESC, b.created_at DESC';
+
+    const [bets] = await pool.query(query, params);
+
+    // Also get summary by date
+    const [summary] = await pool.query(`
+      SELECT session_date, COUNT(*) as count, SUM(total_amount) as total_amount
+      FROM bets
+      WHERE game_id = ? AND status = 'pending'
+      GROUP BY session_date
+      ORDER BY session_date DESC
+    `, [id]);
+
+    res.json({
+      game: games[0],
+      bets,
+      summary,
+      filtered_by_date: session_date || null
+    });
+  } catch (error) {
+    next(error);
   }
 };

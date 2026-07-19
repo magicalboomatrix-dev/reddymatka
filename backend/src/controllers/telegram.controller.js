@@ -7,6 +7,7 @@ const pool = require('../config/database');
 const { parseUpiMessage } = require('../services/upi-message-parser');
 const { matchAndCreditDeposit } = require('../services/auto-deposit-matcher');
 const logger = require('../utils/logger');
+const eventBus = require('../utils/event-bus');
 
 /**
  * POST /api/telegram/webhook/:token
@@ -19,26 +20,39 @@ exports.handleWebhook = async (req, res) => {
   try {
     const update = req.body;
 
-    // Only process text messages
-    const message = update?.message;
-    if (!message || !message.text) {
+    // Support both regular messages and channel posts
+    const message = update?.message || update?.channel_post;
+    if (!message) {
+      return;
+    }
+
+    // Extract text from message.text, message.caption (for photo/document forwards),
+    // or forwarded message content — SMS forwarder bots often use caption
+    const rawText = message.text || message.caption;
+    if (!rawText) {
       return;
     }
 
     const chatId = String(message.chat?.id || '');
     const messageId = String(message.message_id || '');
-    const rawText = message.text;
 
     // Only accept messages from the configured chat
     const allowedChatId = process.env.TELEGRAM_CHAT_ID;
     if (allowedChatId && chatId !== String(allowedChatId)) {
-      logger.warn('telegram', 'Message from unauthorized chat', { chatId });
+      logger.warn('telegram', 'Message from unauthorized chat', { chatId, allowedChatId: String(allowedChatId), messageText: rawText?.substring(0, 80) });
+      return;
+    }
+
+    // Skip system alert messages (not UPI messages)
+    if (rawText.includes('Ledger Drift Detected') || rawText.includes('reddymatka — Ledger') || rawText.startsWith('🔴 **reddymatka')) {
+      logger.info('telegram', 'Skipping system alert message', { messageId, preview: rawText.substring(0, 60) });
       return;
     }
 
     // Check if this message was already processed (idempotency)
     const [existing] = await pool.query(
-      'SELECT id FROM upi_webhook_transactions WHERE telegram_message_id = ? AND telegram_chat_id = ? LIMIT 1',
+      `SELECT id FROM upi_webhook_transactions
+       WHERE telegram_message_id = ? AND telegram_chat_id = ? AND status != 'parse_error' LIMIT 1`,
       [messageId, chatId]
     );
     if (existing.length > 0) {
@@ -49,28 +63,61 @@ exports.handleWebhook = async (req, res) => {
     const parsed = parseUpiMessage(rawText);
 
     if (!parsed.success) {
-      // Store the unparseable message for debugging
+      // Store the unparseable message for debugging (upsert so retries overwrite the old error row)
       await pool.query(
         `INSERT INTO upi_webhook_transactions
           (raw_message, status, error_message, telegram_message_id, telegram_chat_id)
-         VALUES (?, 'parse_error', ?, ?, ?)`,
+         VALUES (?, 'parse_error', ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+           raw_message = VALUES(raw_message),
+           error_message = VALUES(error_message)`,
         [rawText.substring(0, 65000), parsed.error?.substring(0, 490), messageId, chatId]
       );
-      logger.warn('telegram', 'Failed to parse UPI message', { messageId, error: parsed.error });
+      logger.warn('telegram', 'Failed to parse UPI message', { messageId, error: parsed.error, rawText });
       return;
     }
 
-    const { amount, referenceNumber, payerName, txnTime, orderRef } = parsed.data;
+    const { amount, referenceNumber: parsedRef, payerName, txnTime, orderRef } = parsed.data;
 
-    // Store the parsed transaction
-    const [insertResult] = await pool.query(
-      `INSERT INTO upi_webhook_transactions
-        (raw_message, amount, reference_number, payer_name, txn_time, status, telegram_message_id, telegram_chat_id)
-       VALUES (?, ?, ?, ?, ?, 'received', ?, ?)`,
-      [rawText.substring(0, 65000), amount, referenceNumber, payerName?.substring(0, 140), txnTime?.substring(0, 45), messageId, chatId]
+    // BharatPe and some wallet apps don't include a UTR/Ref number.
+    // Generate a synthetic one from message_id + chat_id so it's unique per message.
+    const referenceNumber = parsedRef || `AUTO-${chatId}-${messageId}`;
+
+    // If this message previously failed parsing (parse_error row), remove the stale row
+    // so the new 'received' INSERT succeeds against the (telegram_message_id, telegram_chat_id) UNIQUE key.
+    await pool.query(
+      "DELETE FROM upi_webhook_transactions WHERE telegram_message_id = ? AND telegram_chat_id = ? AND status = 'parse_error'",
+      [messageId, chatId]
     );
 
+    // Store the parsed transaction (guard against duplicate reference_number)
+    let insertResult;
+    try {
+      [insertResult] = await pool.query(
+        `INSERT INTO upi_webhook_transactions
+          (raw_message, amount, reference_number, payer_name, txn_time, status, telegram_message_id, telegram_chat_id)
+         VALUES (?, ?, ?, ?, ?, 'received', ?, ?)`,
+        [rawText.substring(0, 65000), amount, referenceNumber, payerName?.substring(0, 140), txnTime?.substring(0, 45), messageId, chatId]
+      );
+    } catch (insertErr) {
+      // Duplicate reference — already processed, skip silently
+      if (insertErr.code === 'ER_DUP_ENTRY') {
+        logger.info('telegram', 'Skipping duplicate reference number', { referenceNumber, messageId });
+        return;
+      }
+      throw insertErr;
+    }
+
     const webhookTxnId = insertResult.insertId;
+
+    // Emit real-time webhook received event
+    eventBus.emit('webhook_transaction_received', {
+      txnId: webhookTxnId,
+      amount,
+      referenceNumber,
+      payerName,
+      status: 'received',
+    });
 
     // Attempt auto-matching (this is the core logic)
     try {
@@ -92,6 +139,16 @@ exports.handleWebhook = async (req, res) => {
           referenceNumber,
           parsedOrderRef: orderRef,
           matchedOrderRef: result.matchedOrderRef || null,
+        });
+
+        // Emit real-time order matched event
+        eventBus.emit('deposit_order_matched', {
+          orderId: result.orderId,
+          depositId: result.depositId,
+          userId: result.userId,
+          amount,
+          utrNumber: referenceNumber,
+          moderatorId: result.moderatorId,
         });
       } else {
         logger.warn('auto-deposit', 'Payment not matched', {

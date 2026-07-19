@@ -14,17 +14,31 @@ const mysql = require('mysql2/promise');
   const [recon] = await c.query(`
     SELECT
       w.user_id,
-      ROUND(w.balance, 2)                         AS wallet_balance,
-      ROUND(COALESCE(SUM(t.amount), 0), 2)         AS ledger_sum,
-      ROUND(w.balance - COALESCE(SUM(t.amount), 0), 2) AS drift
+      ROUND(w.balance, 2)                               AS wallet_balance,
+      ROUND(COALESCE(wt.main_sum, 0), 2)                AS ledger_balance,
+      ROUND(w.balance - COALESCE(wt.main_sum, 0), 2)    AS bal_drift,
+      ROUND(w.bonus_balance, 2)                         AS bonus_balance,
+      ROUND(COALESCE(wb.bonus_sum, 0), 2)               AS ledger_bonus,
+      ROUND(w.bonus_balance - COALESCE(wb.bonus_sum, 0), 2) AS bonus_drift
     FROM wallets w
-    LEFT JOIN wallet_transactions t ON t.user_id = w.user_id
-    GROUP BY w.user_id
-    HAVING ABS(drift) > 0.01
+    LEFT JOIN (
+      SELECT user_id, SUM(amount) AS main_sum
+      FROM wallet_transactions
+      WHERE status = 'completed' AND type != 'bonus' AND reference_type != 'bet_bonus'
+      GROUP BY user_id
+    ) wt ON wt.user_id = w.user_id
+    LEFT JOIN (
+      SELECT user_id, SUM(amount) AS bonus_sum
+      FROM wallet_transactions
+      WHERE status = 'completed' AND (type = 'bonus' OR reference_type = 'bet_bonus')
+      GROUP BY user_id
+    ) wb ON wb.user_id = w.user_id
+    WHERE ABS(w.balance - COALESCE(wt.main_sum, 0)) > 0.01
+       OR ABS(w.bonus_balance - COALESCE(wb.bonus_sum, 0)) > 0.01
     LIMIT 20
   `);
   if (recon.length === 0) {
-    console.log('✅ All wallets balance matches ledger sum (no drift > ₹0.01)');
+    console.log('✅ All wallets and bonus balances match ledger sums (no drift > ₹0.01)');
   } else {
     console.warn('⚠️  Wallet drift detected:');
     console.table(recon);

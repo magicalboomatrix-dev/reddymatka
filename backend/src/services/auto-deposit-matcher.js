@@ -7,8 +7,15 @@
 const pool = require('../config/database');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const logger = require('../utils/logger');
+const eventBus = require('../utils/event-bus');
 
-const ORDER_EXPIRY_MINUTES = 10;
+function parseNonNegativeInt(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+const ORDER_EXPIRY_MINUTES = Math.max(1, parseNonNegativeInt(process.env.AUTO_DEPOSIT_ORDER_EXPIRY_MINUTES, 4));
+const LATE_MATCH_GRACE_MINUTES = parseNonNegativeInt(process.env.AUTO_DEPOSIT_LATE_MATCH_GRACE_MINUTES, 0);
 const DEFAULT_MIN_DEPOSIT = 100;
 const DEFAULT_MAX_DEPOSIT = 50000;
 
@@ -83,11 +90,15 @@ async function matchAndCreditDeposit({ amount, referenceNumber, payerName, txnTi
       return { matched: false, reason: 'amount_out_of_range' };
     }
 
-    // 3. Find matching pending order (priority: order_ref → pay_amount → base amount)
+    // 3. Find matching pending order (priority: order_ref → pay_amount)
+    //    Also checks recently-expired orders within a grace window so that
+    //    late-arriving Telegram messages (bank SMS delay) can still be credited.
     let pendingOrders = [];
+    let lateMatch = false;
 
     // 3a. Match by order reference code (most precise)
     if (orderRef) {
+      // First try active pending orders
       const [refMatch] = await conn.query(
         `SELECT id, user_id, amount, pay_amount, order_ref
          FROM pending_deposit_orders
@@ -99,6 +110,24 @@ async function matchAndCreditDeposit({ amount, referenceNumber, payerName, txnTi
         [orderRef]
       );
       pendingOrders = refMatch;
+
+      // Grace window: also match recently-expired orders (within LATE_MATCH_GRACE_MINUTES)
+      if (pendingOrders.length === 0) {
+        const [lateRefMatch] = await conn.query(
+          `SELECT id, user_id, amount, pay_amount, order_ref
+           FROM pending_deposit_orders
+           WHERE status = 'expired'
+             AND order_ref = ?
+             AND expires_at > DATE_SUB(NOW(), INTERVAL ? MINUTE)
+           LIMIT 1
+           FOR UPDATE`,
+          [orderRef, LATE_MATCH_GRACE_MINUTES]
+        );
+        if (lateRefMatch.length > 0) {
+          pendingOrders = lateRefMatch;
+          lateMatch = true;
+        }
+      }
     }
 
     // 3b. Match by unique pay_amount (paise-level)
@@ -115,6 +144,25 @@ async function matchAndCreditDeposit({ amount, referenceNumber, payerName, txnTi
         [amount]
       );
       pendingOrders = amountMatch;
+
+      // Grace window for pay_amount match on recently-expired orders
+      if (pendingOrders.length === 0) {
+        const [lateAmountMatch] = await conn.query(
+          `SELECT id, user_id, amount, pay_amount, order_ref
+           FROM pending_deposit_orders
+           WHERE status = 'expired'
+             AND pay_amount = ?
+             AND expires_at > DATE_SUB(NOW(), INTERVAL ? MINUTE)
+           ORDER BY created_at ASC
+           LIMIT 1
+           FOR UPDATE`,
+          [amount, LATE_MATCH_GRACE_MINUTES]
+        );
+        if (lateAmountMatch.length > 0) {
+          pendingOrders = lateAmountMatch;
+          lateMatch = true;
+        }
+      }
     }
 
     if (pendingOrders.length === 0) {
@@ -188,11 +236,20 @@ async function matchAndCreditDeposit({ amount, referenceNumber, payerName, txnTi
     // 9. Apply bonuses (same logic as manual approval)
     await applyDepositBonuses(conn, { depositId, userId: order.user_id, amount: creditAmount });
 
-    // 10. Update order status
+    // 10. Update order status (works for both 'pending' and late-matched 'expired' orders)
     await conn.query(
       'UPDATE pending_deposit_orders SET status = ?, matched_deposit_id = ?, matched_webhook_id = ? WHERE id = ?',
       ['matched', depositId, webhookTxnId, order.id]
     );
+
+    if (lateMatch) {
+      logger.info('auto-deposit', 'Late payment matched after order expiry (grace period)', {
+        orderId: order.id,
+        userId: order.user_id,
+        amount,
+        referenceNumber,
+      });
+    }
 
     // 11. Update webhook transaction status
     await conn.query(
@@ -250,7 +307,7 @@ async function matchAndCreditDeposit({ amount, referenceNumber, payerName, txnTi
 }
 
 /**
- * Apply first-deposit and slab bonuses (mirrored from deposit.controller.js approveDeposit logic)
+ * Apply first-deposit, slab, and pending referral bonuses
  */
 async function applyDepositBonuses(conn, { depositId, userId, amount }) {
   // First deposit bonus
@@ -274,12 +331,50 @@ async function applyDepositBonuses(conn, { depositId, userId, amount }) {
         await conn.query('INSERT INTO bonuses (user_id, type, amount, reference_id) VALUES (?, ?, ?, ?)',
           [userId, 'first_deposit', bonusAmount, `deposit_${depositId}`]);
 
-        const [[walletRow]] = await conn.query('SELECT balance FROM wallets WHERE user_id = ?', [userId]);
+        const [[walletRow]] = await conn.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ?', [userId]);
+        const effectiveBalance = parseFloat(walletRow.balance) + parseFloat(walletRow.bonus_balance);
         await conn.query(
           `INSERT INTO wallet_transactions
             (user_id, type, amount, balance_after, status, reference_type, reference_id, remark)
            VALUES (?, 'bonus', ?, ?, 'completed', 'bonus', ?, ?)`,
-          [userId, bonusAmount, parseFloat(walletRow.balance), `first_deposit_${depositId}`, `First deposit bonus ${bonusPercent}%`]
+          [userId, bonusAmount, effectiveBalance, `first_deposit_${depositId}`, `First deposit bonus ${bonusPercent}%`]
+        );
+      }
+    }
+  }
+
+  // Credit pending referral bonus to this user on first deposit
+  if (depositCount[0].count === 1) {
+    const [pendingReferrals] = await conn.query(
+      "SELECT id, referrer_id, bonus_amount FROM referrals WHERE referred_user_id = ? AND status = 'pending' LIMIT 1",
+      [userId]
+    );
+
+    if (pendingReferrals.length > 0) {
+      const referral = pendingReferrals[0];
+      const refBonus = parseFloat(referral.bonus_amount);
+
+      if (refBonus > 0) {
+        // Credit bonus to the referred user (the one making the deposit)
+        await conn.query('SELECT balance FROM wallets WHERE user_id = ? FOR UPDATE', [userId]);
+        await conn.query('UPDATE wallets SET bonus_balance = bonus_balance + ? WHERE user_id = ?', [refBonus, userId]);
+
+        await conn.query('INSERT INTO bonuses (user_id, type, amount, reference_id) VALUES (?, ?, ?, ?)',
+          [userId, 'referral', refBonus, `ref_signup_${referral.referrer_id}`]);
+
+        const [[refWalletRow]] = await conn.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ?', [userId]);
+        const refEffBalance = parseFloat(refWalletRow.balance) + parseFloat(refWalletRow.bonus_balance);
+        await conn.query(
+          `INSERT INTO wallet_transactions
+            (user_id, type, amount, balance_after, status, reference_type, reference_id, remark)
+           VALUES (?, 'bonus', ?, ?, 'completed', 'bonus', ?, ?)`,
+          [userId, refBonus, refEffBalance, `referral_bonus_${referral.id}`, 'Referral signup bonus (credited on first deposit)']
+        );
+
+        // Mark referral as credited
+        await conn.query(
+          "UPDATE referrals SET status = 'credited', credited_at = NOW() WHERE id = ?",
+          [referral.id]
         );
       }
     }
@@ -299,12 +394,13 @@ async function applyDepositBonuses(conn, { depositId, userId, amount }) {
           await conn.query('INSERT INTO bonuses (user_id, type, amount, reference_id) VALUES (?, ?, ?, ?)',
             [userId, 'slab', slabBonus, `deposit_${depositId}_slab_${threshold}`]);
 
-          const [[walletRow]] = await conn.query('SELECT balance FROM wallets WHERE user_id = ?', [userId]);
+          const [[walletRow]] = await conn.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ?', [userId]);
+          const effectiveBalance = parseFloat(walletRow.balance) + parseFloat(walletRow.bonus_balance);
           await conn.query(
             `INSERT INTO wallet_transactions
               (user_id, type, amount, balance_after, status, reference_type, reference_id, remark)
              VALUES (?, 'bonus', ?, ?, 'completed', 'bonus', ?, ?)`,
-            [userId, slabBonus, parseFloat(walletRow.balance), `slab_${depositId}_${threshold}`, `Slab bonus for ₹${threshold}+ deposit`]
+            [userId, slabBonus, effectiveBalance, `slab_${depositId}_${threshold}`, `Slab bonus for ₹${threshold}+ deposit`]
           );
         }
         break; // Only apply highest matching slab
@@ -324,10 +420,30 @@ async function logAutoDeposit(conn, { webhookTxnId = null, orderId = null, depos
  * Expire stale pending orders (run periodically)
  */
 async function expirePendingOrders() {
+  // Get orders that are about to expire with user details
+  const [ordersToExpire] = await pool.query(
+    `SELECT pdo.id, pdo.user_id, pdo.amount, u.moderator_id
+     FROM pending_deposit_orders pdo
+     JOIN users u ON u.id = pdo.user_id
+     WHERE pdo.status = 'pending' AND pdo.expires_at <= NOW()`
+  );
+
+  // Update status
   const [result] = await pool.query(
     "UPDATE pending_deposit_orders SET status = 'expired' WHERE status = 'pending' AND expires_at <= NOW()"
   );
+
+  // Emit events for each expired order
+  for (const order of ordersToExpire) {
+    eventBus.emit('deposit_order_expired', {
+      orderId: order.id,
+      userId: order.user_id,
+      amount: order.amount,
+      moderatorId: order.moderator_id,
+    });
+  }
+
   return result.affectedRows;
 }
 
-module.exports = { matchAndCreditDeposit, expirePendingOrders, getDepositLimits, ORDER_EXPIRY_MINUTES };
+module.exports = { matchAndCreditDeposit, expirePendingOrders, getDepositLimits, applyDepositBonuses, ORDER_EXPIRY_MINUTES, LATE_MATCH_GRACE_MINUTES };

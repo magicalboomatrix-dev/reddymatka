@@ -1,7 +1,9 @@
 import { headers } from 'next/headers';
 import Footer from "./components/Footer";
 import AuthGate from "./components/AuthGate";
+import PWAHandler from "./components/PWAHandler";
 import { AuthProvider } from "./lib/AuthContext";
+import { LanguageProvider } from "./lib/LanguageContext";
 import "./globals.css";
 
 import { Exo_2, Mona_Sans } from "next/font/google";
@@ -19,15 +21,14 @@ const monaSans = Mona_Sans({
 });
 
 export const metadata = {
-  title: "REDDYMATKA",
-  description: "REDDYMATKA user application",
+  title: "reddymatka",
+  description: "reddymatka user application",
   manifest: "/manifest.json",
 };
 
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
   viewportFit: "cover",
   themeColor: "#111111",
 };
@@ -43,21 +44,28 @@ export default async function RootLayout({ children }) {
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#000000" />
-        <link rel="apple-touch-icon" href="/icons/REDDYMATKA_icon_192.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="reddymatka" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/icons/reddymatka_icon_192.png" />
       </head>
 
       <body
-        className={`${exo2.variable} ${monaSans.variable} flex min-h-screen justify-center bg-[#eef1f5] text-[#171717] antialiased`}
+        className={`${exo2.variable} ${monaSans.variable} flex min-h-screen justify-center overflow-y-auto bg-[#eef1f5] text-[#171717] antialiased`}
         {...(nonce ? { 'data-nonce': nonce } : {})}
       >
-        <AuthProvider>
-          <div className="relative flex w-full max-w-[430px] flex-col overflow-x-hidden bg-white">
-            <AuthGate>
-              {children}
-              <Footer />
-            </AuthGate>
-          </div>
-        </AuthProvider>
+        <LanguageProvider>
+          <AuthProvider>
+            <PWAHandler />
+            <div className="relative flex w-full max-w-[430px] flex-col overflow-x-hidden overflow-y-auto bg-white">
+              <AuthGate>
+                {children}
+                <Footer />
+              </AuthGate>
+            </div>
+          </AuthProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

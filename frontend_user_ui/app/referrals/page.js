@@ -7,6 +7,7 @@ import { bonusAPI } from '../lib/api'
 export default function ReferralsPage() {
   const [referrals, setReferrals] = useState([])
   const [referralCode, setReferralCode] = useState('')
+  const [myReferral, setMyReferral] = useState(null)
   const [loading, setLoading] = useState(true)
   const [claiming, setClaiming] = useState(false)
   const [claimMsg, setClaimMsg] = useState(null)
@@ -22,6 +23,8 @@ export default function ReferralsPage() {
       const res = await bonusAPI.referrals()
       setReferrals(res.referrals || [])
       setReferralCode(res.referral_code || '')
+      setMyReferral(res.my_referral || null)
+      setMyReferral(res.my_referral || null)
     } catch (err) {
       console.error('[referrals] fetch error:', err)
     } finally {
@@ -101,6 +104,24 @@ export default function ReferralsPage() {
             </p>
           </div>
 
+          {/* Pending referral bonus for this user */}
+          {myReferral && myReferral.status === 'pending' && (
+            <div className="mt-4 border border-[#fcd34d] bg-[#fffbeb] px-4 py-3 shadow-sm">
+              <p className="text-xs font-semibold text-[#b45309]">🎁 Pending Referral Bonus</p>
+              <p className="mt-1 text-xs text-[#92400e]">
+                You were referred by <b>{myReferral.referrer_name}</b>. Your bonus of <b>₹{parseFloat(myReferral.bonus_amount).toLocaleString('en-IN')}</b> will be credited after your first deposit.
+              </p>
+            </div>
+          )}
+          {myReferral && myReferral.status === 'credited' && (
+            <div className="mt-4 border border-green-300 bg-green-50 px-4 py-3 shadow-sm">
+              <p className="text-xs font-semibold text-green-700">✅ Referral Bonus Credited</p>
+              <p className="mt-1 text-xs text-green-600">
+                ₹{parseFloat(myReferral.bonus_amount).toLocaleString('en-IN')} bonus from <b>{myReferral.referrer_name}</b> has been credited to your wallet.
+              </p>
+            </div>
+          )}
+
           {/* Referral history */}
           {referrals.length > 0 && (
             <>
@@ -113,6 +134,7 @@ export default function ReferralsPage() {
                     <tr>
                       <th className="border-b border-[#ead8ab] bg-[#f7f0e3] px-3 py-2 text-left">User</th>
                       <th className="border-b border-[#ead8ab] bg-[#f7f0e3] px-3 py-2 text-right">Bonus</th>
+                      <th className="border-b border-[#ead8ab] bg-[#f7f0e3] px-3 py-2 text-center">Status</th>
                       <th className="border-b border-[#ead8ab] bg-[#f7f0e3] px-3 py-2 text-left">Date</th>
                     </tr>
                   </thead>
@@ -121,6 +143,11 @@ export default function ReferralsPage() {
                       <tr key={r.id} className="border-b border-[#f0e3c6]">
                         <td className="px-3 py-2">{r.referred_name || r.referred_phone}</td>
                         <td className="px-3 py-2 text-right text-green-700 font-semibold">₹{parseFloat(r.bonus_amount || 0).toLocaleString()}</td>
+                        <td className="px-3 py-2 text-center">
+                          <span className={`inline-block px-1.5 py-0.5 text-[10px] font-semibold rounded ${r.status === 'credited' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {r.status === 'credited' ? 'Credited' : 'Pending'}
+                          </span>
+                        </td>
                         <td className="px-3 py-2 text-gray-400">
                           {new Date(r.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                         </td>

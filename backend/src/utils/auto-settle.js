@@ -15,9 +15,18 @@ const STALE_PROCESSING_MINUTES = 5;
  */
 async function enqueueSettlement(conn, { gameResultId, gameId, resultNumber, resultDate }) {
   await conn.query(
-    `INSERT IGNORE INTO settlement_queue
-       (game_result_id, game_id, result_number, result_date, status)
-     VALUES (?, ?, ?, ?, 'pending')`,
+    `INSERT INTO settlement_queue
+       (game_result_id, game_id, result_number, result_date, status, attempts, error_message, started_at, completed_at)
+     VALUES (?, ?, ?, ?, 'pending', 0, NULL, NULL, NULL)
+     ON DUPLICATE KEY UPDATE
+       game_id = VALUES(game_id),
+       result_number = VALUES(result_number),
+       result_date = VALUES(result_date),
+       status = 'pending',
+       attempts = 0,
+       error_message = NULL,
+       started_at = NULL,
+       completed_at = NULL`,
     [gameResultId, gameId, resultNumber, resultDate]
   );
 }

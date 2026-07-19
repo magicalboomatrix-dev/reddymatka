@@ -5,12 +5,14 @@ import Header from "../components/Header";
 import { betAPI, gameAPI } from "../lib/api";
 import { formatBetType } from "../lib/formatters";
 import { getSocket } from "../lib/socket";
+import { useTranslation } from "../lib/LanguageContext";
+import { translations } from "../lib/translations";
 
-const STATUS_OPTIONS = [
-  { value: "", label: "All Status" },
-  { value: "pending", label: "Pending" },
-  { value: "win", label: "Win" },
-  { value: "loss", label: "Loss" },
+const getStatusOptions = (t) => [
+  { value: "", label: t(translations.myBets.status) },
+  { value: "pending", label: t(translations.myBets.pending) },
+  { value: "win", label: t(translations.myBets.won) },
+  { value: "loss", label: t(translations.myBets.lost) },
 ];
 
 function formatCurrency(value) {
@@ -28,6 +30,7 @@ function getStatusClasses(status) {
 }
 
 export default function MyBetsPage() {
+  const { t } = useTranslation();
   const [games, setGames] = useState([]);
   const [bets, setBets] = useState([]);
   const [apiSummary, setApiSummary] = useState(null);
@@ -196,10 +199,10 @@ export default function MyBetsPage() {
         <section className="mb-1 overflow-hidden border border-[#1a1206] bg-[#050505] shadow-[0_18px_40px_rgba(0,0,0,0.22)]">
           <div className="bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)]  text-center text-[#111]">
             <h1 className="text-lg font-bold uppercase tracking-[0.14em]">
-              My Bets
+              {t(translations.myBets.title)}
             </h1>
             <p className="mt-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#4d2f00]">
-              All placed bets in one themed history view
+              {t(translations.common.loading)}
             </p>
           </div>
 
@@ -209,7 +212,7 @@ export default function MyBetsPage() {
             <div className="relative grid grid-cols-3 gap-2 text-center">
               <div className="border border-white/10 bg-white/6 backdrop-blur-sm p-1.5 rounded-md">
                 <div className="text-[8px] sm:text-[10px] uppercase tracking-[0.12em] text-white/60">
-                  Bets
+                  {t(translations.myBets.title)}
                 </div>
                 <div className="mt-1 text-[10px] sm:text-[16px] font-bold leading-none text-[#ebda8d]">
                   {summary.totalBets}
@@ -218,7 +221,7 @@ export default function MyBetsPage() {
 
               <div className="border border-white/10 bg-white/6 backdrop-blur-sm p-1.5 rounded-md">
                 <div className="text-[8px] sm:text-[10px] uppercase tracking-[0.12em] text-white/60">
-                  Total Wins
+                  {t(translations.myBets.winAmount)}
                 </div>
                 <div className="mt-1 text-[10px] sm:text-[16px] font-bold leading-none text-[#ebda8d]">
                   {formatCurrency(summary.totalWin)}
@@ -227,7 +230,7 @@ export default function MyBetsPage() {
 
               <div className="border border-white/10 bg-white/6 backdrop-blur-sm p-1.5 rounded-md">
                 <div className="text-[8px] sm:text-[10px] uppercase tracking-[0.12em] text-white/60">
-                  Profit
+                  {t(translations.profitLoss.totalProfit)}
                 </div>
                 <div
                   className={`mt-1 text-[10px] sm:text-[16px] font-bold leading-none ${summary.totalWin - summary.totalStake >= 0 ? "text-[#7df48f]" : "text-[#f87171]"}`}
@@ -246,41 +249,41 @@ export default function MyBetsPage() {
             onClick={() => handlePreset("all")}
             className={`border px-4 py-2 text-xs font-bold transition ${quickFilter === "all" ? "border-[#111] bg-[#111] text-[#ebda8d]" : "border-[#b6842d] bg-[#fff7e0] text-[#b6842d] hover:bg-[#ebda8d]"}`}
           >
-            All
+            {t(translations.common.viewAll)}
           </button>
           <button
             type="button"
             onClick={() => handlePreset("today")}
             className={`border px-4 py-2 text-xs font-bold transition ${quickFilter === "today" ? "border-[#111] bg-[#111] text-[#ebda8d]" : "border-[#b6842d] bg-[#fff7e0] text-[#b6842d] hover:bg-[#ebda8d]"}`}
           >
-            Today
+            {t(translations.home.today)}
           </button>
           <button
             type="button"
             onClick={() => handlePreset("week")}
             className={`border px-4 py-2 text-xs font-bold transition ${quickFilter === "week" ? "border-[#111] bg-[#111] text-[#ebda8d]" : "border-[#b6842d] bg-[#fff7e0] text-[#b6842d] hover:bg-[#ebda8d]"}`}
           >
-            This Week
+            {t(translations.chart.previous)} 7 {t(translations.common.days)}
           </button>
           <button
             type="button"
             onClick={() => handlePreset("month")}
             className={`border px-4 py-2 text-xs font-bold transition ${quickFilter === "month" ? "border-[#111] bg-[#111] text-[#ebda8d]" : "border-[#b6842d] bg-[#fff7e0] text-[#b6842d] hover:bg-[#ebda8d]"}`}
           >
-            This Month
+            {t(translations.myBets.dateRange)}
           </button>
         </div>
 
         <section className="mt-1 border border-[#d6b774] bg-white p-2">
           <div className="mb-1 flex items-center justify-between gap-3">
             <div>
-              <h2 className="mb-1 text-sm font-bold text-[#141414]">Filters</h2>
+              <h2 className="mb-1 text-sm font-bold text-[#141414]">{t(translations.settings.title)}</h2>
               <p className="text-xs text-[#6d6659]">
-                Filter by game, status, keyword, and date range.
+                {t(translations.myBets.game)}, {t(translations.myBets.status)}, {t(translations.myBets.dateRange)}
               </p>
             </div>
             <div className="bg-[#111] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#ebda8d]">
-              {pagination.total} Total
+              {pagination.total} {t(translations.myBets.title)}
             </div>
           </div>
 
@@ -293,7 +296,7 @@ export default function MyBetsPage() {
                 handleFilterChange("game_id", event.target.value)
               }
             >
-              <option value="">All Games</option>
+              <option value="">{t(translations.common.viewAll)} {t(translations.myBets.game)}</option>
               {games.map((game) => (
                 <option key={game.id} value={game.id}>
                   {game.name}
@@ -308,7 +311,7 @@ export default function MyBetsPage() {
                 handleFilterChange("status", event.target.value)
               }
             >
-              {STATUS_OPTIONS.map((option) => (
+              {getStatusOptions(t).map((option) => (
                 <option key={option.value || "all"} value={option.value}>
                   {option.label}
                 </option>
@@ -318,7 +321,7 @@ export default function MyBetsPage() {
             {/* Row 2 (full width) */}
             <input
               type="text"
-              placeholder="Search game, type, or number"
+              placeholder={t(translations.common.loading)}
               className="col-span-2 border border-[#d8d1c4] bg-[#faf7f0] px-4 py-1 text-sm font-medium text-[#111] outline-none transition focus:border-[#b6842d] focus:ring-2 focus:ring-[#ebda8d]"
               value={filters.search}
               onChange={(event) =>
@@ -350,7 +353,7 @@ export default function MyBetsPage() {
         <section>
           {loading && (
             <div className="border border-[#d6b774] bg-white px-5 py-8 text-center text-sm font-medium text-[#6d6659] shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
-              Loading your bets...
+              {t(translations.common.loading)}
             </div>
           )}
 
@@ -366,11 +369,10 @@ export default function MyBetsPage() {
                 <i className="fa-solid fa-receipt" />
               </div>
               <h3 className="mt-4 text-base font-bold text-[#111]">
-                No bets found
+                {t(translations.myBets.noBets)}
               </h3>
               <p className="mt-2 text-sm text-[#6d6659]">
-                Place a bet and it will appear here with numbers, status, and
-                payout details.
+                {t(translations.myBets.game)} {t(translations.myBets.number)} {t(translations.myBets.status)} {t(translations.myBets.winAmount)}
               </p>
             </div>
           )}
@@ -395,10 +397,10 @@ export default function MyBetsPage() {
                     className={`border px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.12em] ${getStatusClasses(bet.status)}`}
                   >
                     {bet.status === "win"
-                      ? "Won"
+                      ? t(translations.myBets.won)
                       : bet.status === "loss"
-                        ? "Lost"
-                        : "Pending"}
+                        ? t(translations.myBets.lost)
+                        : t(translations.myBets.pending)}
                   </span>
                 </div>
 
@@ -406,7 +408,7 @@ export default function MyBetsPage() {
                   <div className="grid grid-cols-2 gap-1 text-sm">
                     <div className="bg-[#f7f0e3] flex flex-col justify-center items-center p-2">
                       <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-[#7a6a4b]">
-                        Stake
+                        {t(translations.myBets.amount)}
                       </div>
                       <div className="mt-1 text-base font-bold text-[#111]">
                         {formatCurrency(bet.total_amount)}
@@ -414,7 +416,7 @@ export default function MyBetsPage() {
                     </div>
                     <div className="bg-[#f7f0e3] flex flex-col justify-center items-center p-2">
                       <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-[#7a6a4b]">
-                        Win
+                        {t(translations.myBets.winAmount)}
                       </div>
                       <div className="mt-1 text-base font-bold text-[#111]">
                         {formatCurrency(bet.win_amount)}
@@ -422,17 +424,17 @@ export default function MyBetsPage() {
                     </div>
                     <div className="bg-[#f7f0e3] flex flex-col justify-center items-center p-2">
                       <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-[#7a6a4b]">
-                        Session
+                        {t(translations.common.date)}
                       </div>
                       <div className="mt-1 text-xs font-semibold text-[#111]">
                         {bet.session_date
-                          ? new Date(bet.session_date + 'T00:00:00').toLocaleDateString('en-IN')
-                          : new Date(bet.created_at).toLocaleDateString("en-IN")}
+                          ? new Date(bet.session_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })
+                          : new Date(bet.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
                       </div>
                     </div>
                     <div className="bg-[#f7f0e3] flex flex-col justify-center items-center p-2">
                       <div className="mb-1 text-[11px] uppercase tracking-[0.12em] text-[#7a6a4b]">
-                        Time
+                        {t(translations.common.time)}
                       </div>
                       <div className="mt-1 text-xs font-semibold text-[#111]">
                         {new Date(bet.created_at).toLocaleTimeString("en-IN", {
@@ -446,10 +448,10 @@ export default function MyBetsPage() {
                   <div className="p-2">
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-sm font-bold uppercase tracking-[0.12em] text-[#141414]">
-                        Selected Numbers
+                        {t(translations.myBets.number)}
                       </h3>
                       <span className="text-[11px] text-[#7a6a4b]">
-                        Bet #{bet.id}
+                        #{bet.id}
                       </span>
                     </div>
 
@@ -490,14 +492,14 @@ export default function MyBetsPage() {
                 }))
               }
             >
-              Previous
+              {t(translations.chart.previous)}
             </button>
             <div className="px-2 text-center">
               <div className="text-sm font-bold text-[#111]">
-                Page {pagination.page}
+                {pagination.page}
               </div>
               <div className="text-[11px] text-[#7a6a4b]">
-                of {pagination.totalPages}
+                / {pagination.totalPages}
               </div>
             </div>
             <button
@@ -511,7 +513,7 @@ export default function MyBetsPage() {
                 }))
               }
             >
-              Next
+              {t(translations.chart.next)}
             </button>
           </section>
         )}

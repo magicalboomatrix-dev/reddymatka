@@ -3,12 +3,15 @@ import { usePathname } from "next/navigation";
 import Link from 'next/link'
 import React from 'react'
 import { useAuth } from '../lib/AuthContext';
+import { useTranslation } from '../lib/LanguageContext';
+import { translations } from '../lib/translations';
 
 const Footer = () => {
+  const { t } = useTranslation();
   const pathname = usePathname();
   const { isLoggedIn } = useAuth();
   const hideFooterRoutes = ["/login", "/login-account", "/bind-bank-card", "/game-page", "/success"];
-  if (!isLoggedIn || hideFooterRoutes.includes(pathname)) {
+  if (!isLoggedIn || hideFooterRoutes.includes(pathname) || pathname.startsWith('/support/')) {
     return null;
   }
 
@@ -24,11 +27,11 @@ const Footer = () => {
           <div className="grid grid-cols-5 pb-2 items-end">
             <Link href="/my-bets" className={itemClass('/my-bets')}>
               <img src="https://api.iconify.design/mdi:cards-playing-outline.svg?color=white" alt="My Bets" className="h-5 w-5 object-contain" />
-              <div className="text-white">My Bets</div>
+              <div className="text-white text-[10px]">{t(translations.footer.myBets)}</div>
             </Link>
             <Link href="/chart" className={itemClass('/chart')}>
               <img src="/images/Casino.png" alt="Chart" className="h-4.5 w-4.5 object-contain" />
-              <div className="text-white">Chart</div>
+              <div className="text-white text-[10px]">{t(translations.footer.chart)}</div>
             </Link>
             <div className="flex justify-center">
               <Link href="/" className={`-mt-8 flex h-[68px] w-[68px] items-center justify-center rounded-full border-4 border-white bg-black shadow-[0_8px_24px_rgba(0,0,0,0.35)] ${isActive('/') ? 'text-[#b6842d]' : 'text-white'}`}>
@@ -37,11 +40,11 @@ const Footer = () => {
             </div>
             <Link href="/wallet" className={itemClass('/wallet')}>
               <img src="https://api.iconify.design/mdi:wallet-outline.svg?color=white" alt="Wallet" className="h-5 w-5 object-contain" />
-              <div className="text-white">Wallet</div>
+              <div className="text-white text-[10px]">{t(translations.footer.wallet)}</div>
             </Link>
             <Link href="/profile" className={itemClass('/profile')}>
               <img src="https://api.iconify.design/mdi:account-circle-outline.svg?color=white" alt="Profile" className="h-5 w-5 object-contain" />
-              <div className="text-white">Profile</div>
+              <div className="text-white text-[10px]">{t(translations.footer.profile)}</div>
             </Link>
           </div>
         </div>

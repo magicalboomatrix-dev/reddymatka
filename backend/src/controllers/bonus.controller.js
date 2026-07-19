@@ -1,5 +1,4 @@
 const pool = require('../config/database');
-const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const { IST_DATE_SQL } = require('../utils/sql-time');
 
 exports.getBonusHistory = async (req, res, next) => {
@@ -24,7 +23,17 @@ exports.getReferrals = async (req, res, next) => {
       ORDER BY r.created_at DESC
     `, [req.user.id]);
 
-    res.json({ referrals, referral_code: req.user.referral_code });
+    // Check if current user has a pending referral bonus (they were referred)
+    const [myReferral] = await pool.query(
+      "SELECT r.id, r.bonus_amount, r.status, u.name as referrer_name FROM referrals r JOIN users u ON r.referrer_id = u.id WHERE r.referred_user_id = ? LIMIT 1",
+      [req.user.id]
+    );
+
+    res.json({
+      referrals,
+      referral_code: req.user.referral_code,
+      my_referral: myReferral[0] || null,
+    });
   } catch (error) {
     next(error);
   }
@@ -73,21 +82,25 @@ exports.claimDailyBonus = async (req, res, next) => {
       [req.user.id, bonusAmount]
     );
 
-    const newBalance = await recordWalletTransaction(conn, {
-      userId: req.user.id,
-      type: 'bonus',
-      amount: bonusAmount,
-      referenceType: 'daily_bonus',
-      referenceId: `daily_${req.user.id}_${new Date().toLocaleDateString('en-CA')}`,
-      remark: 'Daily login bonus',
-    });
+    // Credit daily bonus to bonus_balance (not withdrawable, used for bets)
+    await conn.query('SELECT balance FROM wallets WHERE user_id = ? FOR UPDATE', [req.user.id]);
+    await conn.query('UPDATE wallets SET bonus_balance = bonus_balance + ? WHERE user_id = ?', [bonusAmount, req.user.id]);
+
+    const [[walletRow]] = await conn.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ?', [req.user.id]);
+    const effectiveBalance = parseFloat(walletRow.balance) + parseFloat(walletRow.bonus_balance);
+    await conn.query(
+      `INSERT INTO wallet_transactions
+        (user_id, type, amount, balance_after, status, reference_type, reference_id, remark)
+       VALUES (?, 'bonus', ?, ?, 'completed', 'daily_bonus', ?, ?)`,
+      [req.user.id, bonusAmount, effectiveBalance, `daily_${req.user.id}_${new Date().toLocaleDateString('en-CA')}`, 'Daily login bonus']
+    );
 
     await conn.commit();
 
     res.json({
-      message: `Daily bonus of ₹${bonusAmount} credited.`,
+      message: `Daily bonus of ₹${bonusAmount} credited to bonus balance.`,
       bonus_amount: bonusAmount,
-      new_balance: newBalance,
+      new_balance: parseFloat(walletRow.balance),
     });
   } catch (error) {
     await conn.rollback();

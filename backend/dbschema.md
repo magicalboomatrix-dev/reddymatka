@@ -72,6 +72,17 @@
 | session_date | date | YES |  |  |  |
 
 
+## bonus_settings
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| setting_key | varchar(100) | YES | UNI |  |  |
+| setting_value | varchar(255) | YES |  |  |  |
+| updated_by | int | YES |  |  |  |
+| updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+
+
 ## bonuses
 
 | Column | Type | Nullable | Key | Default | Extra |
@@ -192,6 +203,22 @@
 | updated_at | timestamp | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
 
+## how_to_play_videos
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| title | varchar(255) | NO |  |  |  |
+| description_en | text | YES |  |  |  |
+| description_hi | text | YES |  |  |  |
+| video_path | varchar(512) | YES |  |  |  |
+| thumbnail_path | varchar(512) | YES |  |  |  |
+| display_order | int | NO | MUL | 0 |  |
+| is_active | tinyint(1) | NO | MUL | 1 |  |
+| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+
+
 ## moderator_scanner_audit_logs
 
 | Column | Type | Nullable | Key | Default | Extra |
@@ -203,6 +230,30 @@
 | field_name | varchar(50) | NO | MUL |  |  |
 | old_value | varchar(255) | YES |  |  |  |
 | new_value | varchar(255) | YES |  |  |  |
+| created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+
+## moderator_wallet
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| moderator_id | int | NO | PRI |  |  |
+| balance | decimal(12,2) | YES |  | 0.00 |  |
+| updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
+
+
+## moderator_wallet_transactions
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| moderator_id | int | NO | MUL |  |  |
+| type | varchar(50) | NO |  |  |  |
+| amount | decimal(12,2) | NO |  |  |  |
+| balance_after | decimal(12,2) | YES |  |  |  |
+| reference_id | varchar(100) | YES |  |  |  |
+| remark | varchar(255) | YES |  |  |  |
+| created_by | int | YES | MUL |  |  |
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 
@@ -225,7 +276,7 @@
 | id | int | NO | PRI |  | auto_increment |
 | phone | varchar(20) | NO | MUL |  |  |
 | purpose | enum('register','reset_mpin') | NO |  | register |  |
-| otp | varchar(6) | NO |  |  |  |
+| otp | varchar(255) | YES |  |  |  |
 | expires_at | timestamp | NO | MUL |  |  |
 | is_used | tinyint(1) | YES |  | 0 |  |
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
@@ -256,6 +307,8 @@
 | referrer_id | int | NO | MUL |  |  |
 | referred_user_id | int | NO | UNI |  |  |
 | bonus_amount | decimal(12,2) | YES |  | 0.00 |  |
+| status | enum('pending','credited') | NO |  | credited |  |
+| credited_at | timestamp | YES |  |  |  |
 | created_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 
 
@@ -285,6 +338,32 @@
 | created_at | timestamp | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 | started_at | timestamp | YES |  |  |  |
 | completed_at | timestamp | YES |  |  |  |
+
+
+## support_messages
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| ticket_id | int | NO | MUL |  |  |
+| sender_id | int | NO | MUL |  |  |
+| sender_role | enum('user','admin','moderator') | NO |  |  |  |
+| message | text | NO |  |  |  |
+| created_at | datetime | NO | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+
+## support_tickets
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| user_id | int | NO | MUL |  |  |
+| moderator_id | int | YES | MUL |  |  |
+| subject | varchar(255) | NO |  |  |  |
+| status | enum('open','in_progress','closed') | NO | MUL | open |  |
+| closed_at | datetime | YES |  |  |  |
+| created_at | datetime | NO | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+| updated_at | datetime | NO |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
 
 ## upi_webhook_transactions
@@ -334,6 +413,17 @@
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
 
 
+## utr_attempt_logs
+
+| Column | Type | Nullable | Key | Default | Extra |
+|-------|------|----------|-----|---------|-------|
+| id | int | NO | PRI |  | auto_increment |
+| attempt_user_id | int | NO | MUL |  |  |
+| utr | varchar(50) | NO | MUL |  |  |
+| original_user_id | int | YES | MUL |  |  |
+| created_at | timestamp | YES | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
+
+
 ## wallet_transactions
 
 | Column | Type | Nullable | Key | Default | Extra |
@@ -368,12 +458,14 @@
 |-------|------|----------|-----|---------|-------|
 | id | int | NO | PRI |  | auto_increment |
 | user_id | int | NO | MUL |  |  |
-| bank_id | int | NO | MUL |  |  |
+| bank_id | int | YES | MUL |  |  |
+| withdraw_method | enum('bank','upi','phone','scanner') | NO |  | bank |  |
+| upi_id | varchar(100) | YES |  |  |  |
+| phone_number | varchar(20) | YES |  |  |  |
+| scanner_image | varchar(500) | YES |  |  |  |
 | amount | decimal(12,2) | NO |  |  |  |
 | status | enum('pending','approved','rejected') | YES | MUL | pending |  |
 | approved_by | int | YES | MUL |  |  |
 | reject_reason | varchar(255) | YES |  |  |  |
 | created_at | timestamp | YES | MUL | CURRENT_TIMESTAMP | DEFAULT_GENERATED |
 | updated_at | timestamp | YES |  | CURRENT_TIMESTAMP | DEFAULT_GENERATED on update CURRENT_TIMESTAMP |
-
-

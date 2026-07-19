@@ -1,15 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { customAdsAPI } from '../lib/api'
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || '/api'
-const BACKEND_BASE = API_BASE.replace(/\/api\/?$/, '')
-
-function adImageUrl(imageUrl) {
-  if (!imageUrl) return ''
-  return `${BACKEND_BASE}/uploads/${imageUrl}`
-}
+import { customAdsAPI, buildUploadUrl } from '../lib/api'
 
 export default function CustomAds() {
   const [ads, setAds] = useState([])
@@ -54,14 +46,14 @@ export default function CustomAds() {
                 className="block"
               >
                 <img
-                  src={adImageUrl(ad.image_url)}
+                  src={buildUploadUrl(`ads/${ad.image_url}`)}
                   alt={ad.title || 'Custom Ad'}
                   className="mx-auto h-10 w-full object-contain rounded-xl"
                 />
               </Link>
             ) : ad.image_url ? (
               <img
-                src={adImageUrl(ad.image_url)}
+                src={buildUploadUrl(`ads/${ad.image_url}`)}
                 alt={ad.title || 'Custom Ad'}
                 className="mx-auto h-10 w-full object-contain rounded-xl"
               />

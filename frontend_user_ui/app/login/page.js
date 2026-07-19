@@ -1,8 +1,11 @@
 "use client";
 import React from "react";
 import Link from "next/link";
+import { useTranslation } from "../lib/LanguageContext";
+import { translations } from "../lib/translations";
 
 const LoginPage = () => {
+  const { t } = useTranslation();
   return (
     <div className="mx-auto min-h-screen w-full max-w-[430px]">
       <div className="px-3 pt-3">
@@ -24,16 +27,15 @@ const LoginPage = () => {
             </section>
             <section>
               <h1 className="text-center text-[22px] font-black text-[#111]">
-                <b>Welcome to REDDYMATKA</b>
+                <b>{t(translations.auth.login)} - reddymatka</b>
               </h1>
               <p className="pb-2.5 text-center text-[#444]">
-                Login to REDDYMATKA and unlock exciting  matka <br /> games
-                instant results and real winning opportunities.
+                {t(translations.auth.login)} to reddymatka and unlock exciting matka games, instant results and real winning opportunities.
               </p>
 
               <Link href="/login-account">
                 <div className="inline-block w-full bg-[#1d1c20] px-4 py-3 text-center text-sm font-semibold text-white">
-                  Login
+                  {t(translations.auth.login)}
                 </div>
               </Link>
 

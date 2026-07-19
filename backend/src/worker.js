@@ -20,6 +20,7 @@ process.env.TZ = 'Asia/Kolkata';
 
 const { startAutoSettle } = require('./utils/auto-settle');
 const { startWatchdog, stopWatchdog } = require('./utils/watchdog');
+const { startBetReconciliationWorker, stopBetReconciliationWorker } = require('./utils/bet-reconciliation');
 const redis = require('./services/redis.service');
 const eventBus = require('./utils/event-bus');
 const logger = require('./utils/logger');
@@ -31,6 +32,7 @@ async function main() {
   // recent_winner) are forwarded to the HTTP server's Socket.IO instance.
   await eventBus.initPublisher();
   startAutoSettle();
+  startBetReconciliationWorker();
   startWatchdog(); // financial watchdog — 5-min checks, Telegram alerts
 
   // Graceful shutdown
@@ -38,6 +40,7 @@ async function main() {
     logger.info('worker', `Received ${signal} — shutting down`);
     const { stopAutoSettle } = require('./utils/auto-settle');
     stopAutoSettle();
+    stopBetReconciliationWorker();
     stopWatchdog();
     process.exit(0);
   }

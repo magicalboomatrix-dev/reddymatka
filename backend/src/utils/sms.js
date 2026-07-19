@@ -1,56 +1,28 @@
 const twilio = require('twilio');
 const { normalizePhone } = require('./phone');
 
-function applyTemplate(template, values) {
-  return String(template || '').replace(/{{\s*(\w+)\s*}}/g, (_, key) => {
-    const value = values[key];
-    return value === undefined || value === null ? '' : String(value);
-  });
-}
-
-function getTwilioConfig() {
+async function sendTwilioOtp({ phone, otp }) {
   const accountSid = process.env.TWILIO_ACCOUNT_SID;
   const authToken = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_PHONE_NUMBER;
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
+  const fromNumber = process.env.TWILIO_PHONE_NUMBER;
 
-  if (!accountSid || !authToken) {
-    throw new Error('TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are required in production to send OTPs.');
+  if (!accountSid || !authToken || !fromNumber) {
+    throw new Error('TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER are required in production to send OTPs.');
   }
 
-  if (!from && !messagingServiceSid) {
-    throw new Error('Set TWILIO_PHONE_NUMBER or TWILIO_MESSAGING_SERVICE_SID in production to send OTPs.');
-  }
-
-  return {
-    client: twilio(accountSid, authToken),
-    from,
-    messagingServiceSid,
-    messageTemplate: process.env.TWILIO_OTP_TEMPLATE || 'Your REDDYMATKA OTP is {{otp}}. Valid for {{expiryMinutes}} minutes.',
-  };
-}
-
-async function sendProductionOtpSms({ phone, otp, purpose, expiryMinutes }) {
-  const { client, from, messagingServiceSid, messageTemplate } = getTwilioConfig();
   const normalizedPhone = normalizePhone(phone);
-
   if (!normalizedPhone) {
-    throw new Error('Valid phone number with country code required for OTP delivery.');
+    throw new Error('A valid phone number is required to send OTP.');
   }
 
-  const message = applyTemplate(messageTemplate, { phone, otp, purpose, expiryMinutes });
-  const payload = {
+  const client = twilio(accountSid, authToken);
+  const message = await client.messages.create({
+    body: `Your reddymatka  OTP is: ${otp}. Valid for 5 minutes. Do not share with anyone.`,
+    from: fromNumber,
     to: normalizedPhone,
-    body: message,
-  };
+  });
 
-  if (messagingServiceSid) {
-    payload.messagingServiceSid = messagingServiceSid;
-  } else {
-    payload.from = from;
-  }
-
-  return client.messages.create(payload);
+  return { sid: message.sid };
 }
 
 async function sendOtpSms({ phone, otp, purpose, expiryMinutes }) {
@@ -59,7 +31,7 @@ async function sendOtpSms({ phone, otp, purpose, expiryMinutes }) {
     return { mode: 'development' };
   }
 
-  return sendProductionOtpSms({ phone, otp, purpose, expiryMinutes });
+  return sendTwilioOtp({ phone, otp });
 }
 
 module.exports = {

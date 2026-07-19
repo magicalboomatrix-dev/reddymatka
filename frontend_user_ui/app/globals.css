@@ -7,7 +7,26 @@
 html,
 body {
   overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* Smooth momentum scrolling on iOS/WebView */
+}
+
+/* Standalone/TWA mode - hide browser UI */
+@media all and (display-mode: standalone) {
+  html {
+    /* Ensure full height without browser chrome */
+    height: 100vh;
+    height: 100dvh;
+  }
   
+  body {
+    /* Allow natural scrolling behavior */
+    overscroll-behavior-y: auto;
+  }
+}
+
+/* Force standalone look in TWA */
+body.standalone-mode {
+  overscroll-behavior-y: auto;
 }
 
 html {

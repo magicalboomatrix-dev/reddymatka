@@ -7,9 +7,10 @@ import Users from './pages/Users';
 import Moderators from './pages/Moderators';
 import Deposits from './pages/Deposits';
 import Withdrawals from './pages/Withdrawals';
+import Bets from './pages/Bets';
 import Games from './pages/Games';
 import Settings from './pages/Settings';
-import Analytics from './pages/Analytics';
+import Jantri from './pages/Jantri';
 import Notifications from './pages/Notifications';
 import FraudLogs from './pages/FraudLogs';
 import ModeratorDetail from './pages/ModeratorDetail';
@@ -19,7 +20,13 @@ import CustomAds from './pages/CustomAds';
 import AutoDeposits from './pages/AutoDeposits';
 import UpiManagement from './pages/UpiManagement';
 import SettlementMonitor from './pages/SettlementMonitor';
-import WalletAudit from './pages/WalletAudit';
+import WalletTransactions from './pages/WalletTransactions';
+import BonusTransactions from './pages/BonusTransactions';
+import FinancialReport from './pages/FinancialReport';
+import MyScanner from './pages/MyScanner';
+import HowToPlay from './pages/HowToPlay';
+import Referrals from './pages/Referrals';
+import Support from './pages/Support';
 
 const APP_ROUTES = [
   { index: true, element: <Dashboard /> },
@@ -31,15 +38,23 @@ const APP_ROUTES = [
   { path: 'auto-deposits', element: <AutoDeposits /> },
   { path: 'upi-management', element: <UpiManagement /> },
   { path: 'withdrawals', element: <Withdrawals /> },
+  { path: 'bets', element: <Bets /> },
   { path: 'games', element: <Games /> },
   { path: 'results', element: <Results /> },
   { path: 'settings', element: <Settings /> },
-  { path: 'analytics', element: <Analytics /> },
+  { path: 'jantri', element: <Jantri /> },
   { path: 'notifications', element: <Notifications /> },
   { path: 'fraud-logs', element: <FraudLogs /> },
   { path: 'custom-ads', element: <CustomAds /> },
   { path: 'settlement-monitor', element: <SettlementMonitor /> },
-  { path: 'wallet-audit', element: <WalletAudit /> },
+  { path: 'wallet-transactions', element: <WalletTransactions /> },
+  { path: 'financial-report', element: <FinancialReport /> },
+  { path: 'bonus-transactions', element: <BonusTransactions /> },
+  { path: 'wallet-audit', element: <Navigate to="/wallet-transactions" replace /> },
+  { path: 'my-scanner', element: <MyScanner /> },
+  { path: 'how-to-play', element: <HowToPlay /> },
+  { path: 'referrals', element: <Referrals /> },
+  { path: 'support', element: <Support /> },
 ];
 
 function ProtectedRoute({ children }) {

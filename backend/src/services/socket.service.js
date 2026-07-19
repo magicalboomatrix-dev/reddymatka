@@ -93,6 +93,60 @@ function initSocket(httpServer) {
     io.emit('recent_winner', { userName, amount, betType, gameId });
   });
 
+  // ── Auto-Deposit Events ──────────────────────────────────────────────
+  eventBus.on('deposit_order_created', ({ orderId, userId, amount, payAmount, userName, userPhone, moderatorId }) => {
+    const payload = { orderId, userId, amount, payAmount, userName, userPhone, createdAt: new Date().toISOString() };
+    // Notify the user
+    io.to(`user_${userId}`).emit('deposit_order_created', payload);
+    // Notify admins
+    io.to('admin').emit('deposit_order_created', { ...payload, moderatorId });
+    // Notify specific moderator if assigned
+    if (moderatorId) {
+      io.to(`user_${moderatorId}`).emit('deposit_order_created', payload);
+    }
+  });
+
+  eventBus.on('deposit_order_matched', ({ orderId, depositId, userId, amount, utrNumber, moderatorId }) => {
+    const payload = { orderId, depositId, userId, amount, utrNumber, matchedAt: new Date().toISOString() };
+    io.to(`user_${userId}`).emit('deposit_order_matched', payload);
+    io.to('admin').emit('deposit_order_matched', { ...payload, moderatorId });
+    if (moderatorId) {
+      io.to(`user_${moderatorId}`).emit('deposit_order_matched', payload);
+    }
+  });
+
+  eventBus.on('deposit_order_expired', ({ orderId, userId, amount, moderatorId }) => {
+    const payload = { orderId, userId, amount, expiredAt: new Date().toISOString() };
+    io.to(`user_${userId}`).emit('deposit_order_expired', payload);
+    io.to('admin').emit('deposit_order_expired', { ...payload, moderatorId });
+    if (moderatorId) {
+      io.to(`user_${moderatorId}`).emit('deposit_order_expired', payload);
+    }
+  });
+
+  eventBus.on('deposit_order_cancelled', ({ orderId, userId, amount, cancelledBy, moderatorId }) => {
+    const payload = { orderId, userId, amount, cancelledBy, cancelledAt: new Date().toISOString() };
+    io.to(`user_${userId}`).emit('deposit_order_cancelled', payload);
+    io.to('admin').emit('deposit_order_cancelled', { ...payload, moderatorId });
+    if (moderatorId) {
+      io.to(`user_${moderatorId}`).emit('deposit_order_cancelled', payload);
+    }
+  });
+
+  eventBus.on('deposit_order_credited', ({ orderId, depositId, userId, amount, utrNumber, creditedBy, moderatorId }) => {
+    const payload = { orderId, depositId, userId, amount, utrNumber, creditedBy, creditedAt: new Date().toISOString() };
+    io.to(`user_${userId}`).emit('deposit_order_credited', payload);
+    io.to('admin').emit('deposit_order_credited', { ...payload, moderatorId });
+    if (moderatorId) {
+      io.to(`user_${moderatorId}`).emit('deposit_order_credited', payload);
+    }
+  });
+
+  eventBus.on('webhook_transaction_received', ({ txnId, amount, referenceNumber, payerName, status }) => {
+    const payload = { txnId, amount, referenceNumber, payerName, status, receivedAt: new Date().toISOString() };
+    io.to('admin').emit('webhook_transaction_received', payload);
+  });
+
   // Start Redis subscriber to bridge worker-process events to Socket.IO rooms.
   // This runs as fire-and-forget — a startup failure degrades to in-process only.
   initRedisSubscriber().catch(() => {});
@@ -125,6 +179,35 @@ function bridgeToSocket(event, data) {
       break;
     case 'recent_winner':
       io.emit('recent_winner', data);
+      break;
+    // Auto-deposit events via Redis
+    case 'deposit_order_created':
+      io.to('admin').emit('deposit_order_created', data);
+      if (data.moderatorId) io.to(`user_${data.moderatorId}`).emit('deposit_order_created', data);
+      io.to(`user_${data.userId}`).emit('deposit_order_created', data);
+      break;
+    case 'deposit_order_matched':
+      io.to('admin').emit('deposit_order_matched', data);
+      if (data.moderatorId) io.to(`user_${data.moderatorId}`).emit('deposit_order_matched', data);
+      io.to(`user_${data.userId}`).emit('deposit_order_matched', data);
+      break;
+    case 'deposit_order_expired':
+      io.to('admin').emit('deposit_order_expired', data);
+      if (data.moderatorId) io.to(`user_${data.moderatorId}`).emit('deposit_order_expired', data);
+      io.to(`user_${data.userId}`).emit('deposit_order_expired', data);
+      break;
+    case 'deposit_order_cancelled':
+      io.to('admin').emit('deposit_order_cancelled', data);
+      if (data.moderatorId) io.to(`user_${data.moderatorId}`).emit('deposit_order_cancelled', data);
+      io.to(`user_${data.userId}`).emit('deposit_order_cancelled', data);
+      break;
+    case 'deposit_order_credited':
+      io.to('admin').emit('deposit_order_credited', data);
+      if (data.moderatorId) io.to(`user_${data.moderatorId}`).emit('deposit_order_credited', data);
+      io.to(`user_${data.userId}`).emit('deposit_order_credited', data);
+      break;
+    case 'webhook_transaction_received':
+      io.to('admin').emit('webhook_transaction_received', data);
       break;
     default:
       // Unknown event type — ignore silently to stay forward-compatible.

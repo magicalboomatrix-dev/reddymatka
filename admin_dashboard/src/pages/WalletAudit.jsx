@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useToast, ToastContainer } from '../components/ui';
+import { cleanDisplayText } from '../utils/display';
 
 const TYPE_COLORS = {
   deposit:    'text-green-600',
@@ -65,16 +66,18 @@ export default function WalletAudit() {
           <div className="text-sm text-gray-400">Loading…</div>
         ) : reconciliation && (
           <div className="space-y-3">
-            <div className="bg-white border px-4 py-3 inline-block">
-              <div className="text-xs text-gray-500">Total Wallet Balance (all users)</div>
-              <div className="text-2xl font-bold text-gray-800">
-                ₹{parseFloat(reconciliation.wallet_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            <div className="flex flex-wrap gap-3">
+              <div className="bg-white border px-4 py-3">
+                <div className="text-xs text-gray-500">Total Wallet Balance (all users)</div>
+                <div className="text-2xl font-bold text-gray-800">
+                  ₹{parseFloat(reconciliation.wallet_total).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
               </div>
-            </div>
-            <div className="bg-white border px-4 py-3 inline-block ml-3">
-              <div className="text-xs text-gray-500">Pending Withdrawals</div>
-              <div className="text-2xl font-bold text-red-600">
-                ₹{parseFloat(reconciliation.pending_withdrawals).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              <div className="bg-white border px-4 py-3">
+                <div className="text-xs text-gray-500">Pending Withdrawals</div>
+                <div className="text-2xl font-bold text-red-600">
+                  ₹{parseFloat(reconciliation.pending_withdrawals).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                </div>
               </div>
             </div>
 
@@ -128,7 +131,7 @@ export default function WalletAudit() {
         {ledger && (
           <div className="space-y-3">
             {/* Wallet header */}
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-3">
               <div className="bg-white border px-4 py-2">
                 <div className="text-xs text-gray-500">Balance</div>
                 <div className="text-lg font-bold text-green-700">
@@ -172,8 +175,8 @@ export default function WalletAudit() {
                       <td className="px-4 py-2 text-right text-gray-600">
                         ₹{parseFloat(t.balance_after).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </td>
-                      <td className="px-4 py-2 font-mono text-xs text-gray-500">{t.reference_id || '-'}</td>
-                      <td className="px-4 py-2 text-xs">{t.remark || '-'}</td>
+                      <td className="px-4 py-2 font-mono text-xs text-gray-500">{cleanDisplayText(t.reference_id)}</td>
+                      <td className="px-4 py-2 text-xs">{cleanDisplayText(t.remark)}</td>
                       <td className="px-4 py-2 text-xs text-gray-400">
                         {new Date(t.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
                       </td>
@@ -188,3 +191,4 @@ export default function WalletAudit() {
     </div>
   );
 }
+

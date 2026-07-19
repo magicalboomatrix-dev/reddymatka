@@ -4,6 +4,8 @@ const { isResultVisible, getResultDate, resolveGameWindow } = require('../utils/
 const { escapeLike } = require('../utils/pagination');
 const redis = require('../services/redis.service');
 const eventBus = require('../utils/event-bus');
+const { reverseSettlement } = require('../utils/settle-bets');
+const { reconcileWalletForBet } = require('../utils/bet-reconciliation');
 
 function normalizeResultNumber(value) {
   const trimmed = String(value ?? '').trim();
@@ -245,9 +247,13 @@ exports.getLiveResults = async (req, res, next) => {
     const now = new Date();
 
     // 2. For each game compute the correct result_date and close datetime.
+    //    getResultDate returns the *next betting session* date, which after
+    //    close_time jumps to tomorrow.  For live-result display we need the
+    //    date of the session that just closed (today), so we derive the
+    //    result_date from resolveGameWindow's closeDatetime.
     const gamesWithDates = gameRows.map((g) => {
-      const resultDate = getResultDate(g, now);
       const { closeDatetime } = resolveGameWindow(g, now);
+      const resultDate = formatDate(closeDatetime);
       return { ...g, resultDate, closeDatetime };
     });
 
@@ -407,6 +413,7 @@ exports.upsertResult = async (req, res, next) => {
     const gameId = parseInt(req.body.game_id, 10);
     const { result_date, declared_at } = req.body;
     const resultNumber = normalizeResultNumber(req.body.result_number);
+    const force = req.body.force === true || req.body.force === 'true';
 
     if (!gameId || !result_date || !resultNumber) {
       return res.status(400).json({ error: 'Game, result date, and a valid 2-digit result number are required.' });
@@ -415,6 +422,48 @@ exports.upsertResult = async (req, res, next) => {
     const game = await getGameById(gameId);
     if (!game) {
       return res.status(404).json({ error: 'Game not found.' });
+    }
+
+    // Check if a result already exists and whether it's been settled
+    const [existingResult] = await pool.query(
+      'SELECT id, result_number, is_settled, declared_at FROM game_results WHERE game_id = ? AND result_date = ? LIMIT 1',
+      [gameId, result_date]
+    );
+
+    const oldResult = existingResult.length > 0 ? existingResult[0] : null;
+
+    // Block ALL edits more than 30 minutes after declaration (unless force=true)
+    if (oldResult && oldResult.declared_at) {
+      const declaredAt = new Date(oldResult.declared_at);
+      const minutesSince = (Date.now() - declaredAt.getTime()) / 60000;
+      if (minutesSince > 30 && !force) {
+        return res.status(403).json({
+          error: `Result is locked. It was declared at ${declaredAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (${Math.floor(minutesSince)} minutes ago). Results cannot be changed more than 30 minutes after declaration. Use "force: true" to override (requires admin confirmation).`,
+        });
+      }
+    }
+
+    const isRevision = oldResult && oldResult.is_settled && oldResult.result_number !== resultNumber;
+    let reversedCount = 0;
+    let reversedBetIds = [];
+
+    // If result was already settled and the number is changing, reverse the old settlement
+    if (isRevision) {
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        const reverseResult = await reverseSettlement(conn, oldResult.id);
+        reversedCount = reverseResult.reversedCount;
+        reversedBetIds = reverseResult.betIds;
+        // Also remove the old settlement_queue entry so a new one can be created
+        await conn.query('DELETE FROM settlement_queue WHERE game_result_id = ?', [oldResult.id]);
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        throw err;
+      } finally {
+        conn.release();
+      }
     }
 
     const effectiveDeclaredAt = declared_at || buildDeclaredAt(result_date, game.result_time || game.close_time);
@@ -432,27 +481,45 @@ exports.upsertResult = async (req, res, next) => {
     redis.delPattern('cache:/api/results*').catch(() => {});
     redis.delPattern('cache:/api/games*').catch(() => {});
 
-    // Enqueue settlement job so bets are settled regardless of which admin path declared the result.
-    // INSERT IGNORE is idempotent — if a job already exists for this game_result_id it is silently skipped.
+    // Enqueue settlement job
     const resultId = savedRows[0]?.id || null;
     if (resultId) {
       const resultStr = resultNumber.padStart(2, '0');
       await pool.query(
-        `INSERT IGNORE INTO settlement_queue
-           (game_result_id, game_id, result_number, result_date, status)
-         VALUES (?, ?, ?, ?, 'pending')`,
+        `INSERT INTO settlement_queue
+           (game_result_id, game_id, result_number, result_date, status, attempts, error_message, started_at, completed_at)
+         VALUES (?, ?, ?, ?, 'pending', 0, NULL, NULL, NULL)
+         ON DUPLICATE KEY UPDATE
+           game_id = VALUES(game_id),
+           result_number = VALUES(result_number),
+           result_date = VALUES(result_date),
+           status = 'pending',
+           attempts = 0,
+           error_message = NULL,
+           started_at = NULL,
+           completed_at = NULL`,
         [resultId, gameId, resultStr, result_date]
       );
-      // Notify real-time subscribers (fire-and-forget)
       eventBus.emit('result_declared', { gameId, resultId, resultDate: result_date, resultNumber: resultStr });
     }
 
+    if (isRevision && reversedBetIds.length > 0) {
+      for (const betId of reversedBetIds) {
+        await reconcileWalletForBet(betId);
+      }
+    }
+
+    const message = isRevision
+      ? `Result revised. ${reversedCount} bet(s) reversed and re-queued for settlement.`
+      : 'Result saved successfully.';
+
     res.json({
-      message: 'Result saved successfully.',
+      message,
       resultId,
       game_name: game.name,
       result_number: resultNumber,
       result_date,
+      reversed: isRevision ? reversedCount : undefined,
     });
   } catch (error) {
     next(error);
@@ -465,6 +532,7 @@ exports.updateResultById = async (req, res, next) => {
     const gameId = parseInt(req.body.game_id, 10);
     const { result_date, declared_at } = req.body;
     const resultNumber = normalizeResultNumber(req.body.result_number);
+    const force = req.body.force === true || req.body.force === 'true';
 
     if (!resultId || !gameId || !result_date || !resultNumber) {
       return res.status(400).json({ error: 'Result id, game, result date, and a valid 2-digit result number are required.' });
@@ -475,8 +543,19 @@ exports.updateResultById = async (req, res, next) => {
       return res.status(404).json({ error: 'Result not found.' });
     }
 
-    if (Number(existing.linked_bet_count) > 0) {
-      return res.status(409).json({ error: 'This result is already linked to settled bets and cannot be edited from history.' });
+    // Block ALL edits more than 30 minutes after declaration (unless force=true)
+    if (existing.declared_at) {
+      const declaredAt = new Date(existing.declared_at);
+      const minutesSince = (Date.now() - declaredAt.getTime()) / 60000;
+      if (minutesSince > 30 && !force) {
+        return res.status(403).json({
+          error: `Result is locked. It was declared at ${declaredAt.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} (${Math.floor(minutesSince)} minutes ago). Results cannot be changed more than 30 minutes after declaration.`,
+        });
+      }
+    }
+
+    if (Number(existing.linked_bet_count) > 0 && !force) {
+      return res.status(409).json({ error: 'This result is already linked to settled bets and cannot be edited from history. Use force=true to override with re-settlement.' });
     }
 
     const game = await getGameById(gameId);
@@ -485,19 +564,70 @@ exports.updateResultById = async (req, res, next) => {
     }
 
     const effectiveDeclaredAt = declared_at || buildDeclaredAt(result_date, game.result_time || game.close_time);
+
+    // If force=true and bets are linked, reverse settlement first
+    let reversedCount = 0;
+    let reversedBetIds = [];
+    if (force && Number(existing.linked_bet_count) > 0 && existing.result_number !== resultNumber) {
+      const conn = await pool.getConnection();
+      try {
+        await conn.beginTransaction();
+        const reverseResult = await reverseSettlement(conn, resultId);
+        reversedCount = reverseResult.reversedCount;
+        reversedBetIds = reverseResult.betIds;
+        await conn.query('DELETE FROM settlement_queue WHERE game_result_id = ?', [resultId]);
+        await conn.commit();
+      } catch (err) {
+        await conn.rollback();
+        throw err;
+      } finally {
+        conn.release();
+      }
+    }
+
     await pool.query(
-      'UPDATE game_results SET game_id = ?, result_number = ?, result_date = ?, declared_at = ? WHERE id = ?',
+      'UPDATE game_results SET game_id = ?, result_number = ?, result_date = ?, declared_at = ?, is_settled = 0 WHERE id = ?',
       [gameId, resultNumber, result_date, effectiveDeclaredAt, resultId]
     );
 
+    // Enqueue/update settlement job
+    await pool.query(
+      `INSERT INTO settlement_queue
+         (game_result_id, game_id, result_number, result_date, status, attempts, error_message, started_at, completed_at)
+       VALUES (?, ?, ?, ?, 'pending', 0, NULL, NULL, NULL)
+       ON DUPLICATE KEY UPDATE
+         game_id = VALUES(game_id),
+         result_number = VALUES(result_number),
+         result_date = VALUES(result_date),
+         status = 'pending',
+         attempts = 0,
+         error_message = NULL,
+         started_at = NULL,
+         completed_at = NULL`,
+      [resultId, gameId, resultNumber.padStart(2, '0'), result_date]
+    );
+    eventBus.emit('result_declared', { gameId, resultId, resultDate: result_date, resultNumber: resultNumber.padStart(2, '0') });
+
+    // Reconcile wallets for reversed bets if any
+    if (force && reversedCount > 0) {
+      for (const betId of reversedBetIds) {
+        await reconcileWalletForBet(betId);
+      }
+    }
+
     redis.delPattern('cache:/api/results*').catch(() => {});
 
+    const message = (force && reversedCount > 0)
+      ? `Result force-updated. ${reversedCount} bet(s) reversed and re-queued for settlement.`
+      : 'Result updated successfully.';
+
     res.json({
-      message: 'Result updated successfully.',
+      message,
       resultId,
       game_name: game.name,
       result_number: resultNumber,
       result_date,
+      reversed: (force && reversedCount > 0) ? reversedCount : undefined,
     });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
