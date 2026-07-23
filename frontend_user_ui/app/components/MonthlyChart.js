@@ -113,17 +113,17 @@ const MonthlyChart = ({ data, gameNames: providedGameNames = [] }) => {
         </h2>
       </div>
 
-      <div className="overflow-x-auto border border-[#d6b774]">
-        <table className="min-w-max w-full border-collapse text-xs text-center">
+      <div className="overflow-x-auto border border-[#d6b774] scrollbar-hide">
+        <table className="w-full border-collapse text-center table-fixed">
           {/* HEADER */}
           <thead>
-            <tr className="bg-[#c99a3a] text-white font-bold">
-              <th className="sticky left-0 z-20 bg-[#c99a3a] border border-[#d6b774] px-3 py-2">
+            <tr className="bg-[#c99a3a] text-white font-bold text-[9px] sm:text-[10px]">
+              <th className="sticky left-0 z-20 bg-[#c99a3a] border border-[#d6b774] p-1 w-12 sm:w-14">
                 Date
               </th>
 
               {gameNames.map((g) => (
-                <th key={g} className="border border-[#d6b774] px-3 py-2">
+                <th key={g} className="border border-[#d6b774] px-0.5 py-1 leading-[1.1] uppercase break-words">
                   {g}
                 </th>
               ))}
@@ -131,21 +131,21 @@ const MonthlyChart = ({ data, gameNames: providedGameNames = [] }) => {
           </thead>
 
           {/* BODY */}
-          <tbody>
+          <tbody className="text-[10px] sm:text-[11px]">
             {dates.map((date, index) => {
               const rowBg = index % 2 === 0 ? "bg-[#efefef]" : "bg-[#e3e3e3]";
 
               return (
                 <tr key={date} className={rowBg}>
                   {/* STICKY DATE COLUMN */}
-                  <td className="sticky left-0 bg-[#c99a3a] text-white font-semibold border border-[#d6b774] px-3 py-2">
+                  <td className="sticky left-0 bg-[#c99a3a] text-white font-semibold border border-[#d6b774] p-1 text-[9px] sm:text-[10px]">
                     {formatDateLabel(date)}
                   </td>
 
                   {gameNames.map((g) => (
                     <td
                       key={g}
-                      className="border border-[#d6b774] px-3 py-2 text-black w-32"
+                      className="border border-[#d6b774] px-0.5 py-1 text-black font-semibold"
                     >
                       {renderChartCell(dateMap[date]?.[g])}
                     </td>

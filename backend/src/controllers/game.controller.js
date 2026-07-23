@@ -74,24 +74,21 @@ exports.listGames = async (req, res, next) => {
       batchResults = rows;
     }
 
-    // Also fetch the most recent declared result per game (for showing last result if current session has none)
+    // Also fetch the most recent declared result per game strictly BEFORE current session date (Yesterday)
     let recentResults = [];
     if (games.length > 0) {
-      const gameIds = gameDateMap.map((d) => d.id);
-      const [rows] = await pool.query(
-        `SELECT gr.game_id, gr.result_number, DATE_FORMAT(gr.result_date, '%Y-%m-%d') AS result_date,
-                gr.declared_at, gr.is_settled
-         FROM game_results gr
-         INNER JOIN (
-           SELECT game_id, MAX(result_date) AS max_date
+      const queries = gameDateMap.map(d => 
+        pool.query(
+          `SELECT game_id, result_number, DATE_FORMAT(result_date, '%Y-%m-%d') AS result_date,
+                  declared_at, is_settled
            FROM game_results
-           WHERE game_id IN (?) AND declared_at IS NOT NULL
-           GROUP BY game_id
-         ) latest ON gr.game_id = latest.game_id AND gr.result_date = latest.max_date
-         WHERE gr.game_id IN (?) AND gr.declared_at IS NOT NULL`,
-        [gameIds, gameIds]
+           WHERE game_id = ? AND result_date < ? AND declared_at IS NOT NULL
+           ORDER BY result_date DESC LIMIT 1`,
+          [d.id, d.currentSessionDate]
+        )
       );
-      recentResults = rows;
+      const results = await Promise.all(queries);
+      recentResults = results.map(r => r[0][0]).filter(Boolean);
     }
 
     // Build lookup maps

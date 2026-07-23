@@ -64,24 +64,25 @@ export default function Layout() {
     <div className="min-h-screen bg-gray-100">
       {/* Mobile sidebar overlay with blur effect */}
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300"
-          onClick={() => setSidebarOpen(false)}
+        <div 
+          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity duration-300" 
+          onClick={() => setSidebarOpen(false)} 
         />
       )}
 
       {/* Sidebar */}
-      <aside
-        className={`fixed top-0 left-0 z-50 h-full w-64 bg-dark-900 text-white transform transition-transform duration-300 ease-out lg:translate-x-0 flex flex-col shadow-2xl ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+      <aside 
+        className={`fixed top-0 left-0 z-50 h-full w-64 bg-dark-900 text-white transform transition-transform duration-300 ease-out lg:translate-x-0 flex flex-col shadow-2xl ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
       >
         {/* Logo Section */}
         <div className="p-4 sm:p-6 border-b border-dark-700 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-primary-400">reddymatka</h1>
+            <h1 className="text-xl font-bold text-primary-400">REDDYMATKA</h1>
             <p className="text-xs sm:text-sm text-dark-400 mt-0.5">Admin Panel</p>
           </div>
-          <button
+          <button 
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden p-1 text-dark-400 hover:text-white"
           >
@@ -103,10 +104,11 @@ export default function Layout() {
                 key={item.path}
                 to={item.path}
                 onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2.5 mb-0.5 rounded-lg transition-all duration-200 ${isActive
+                className={`flex items-center gap-3 px-3 py-2.5 mb-0.5 rounded-lg transition-all duration-200 ${
+                  isActive
                     ? 'bg-primary-600 text-white shadow-md'
                     : 'text-dark-300 hover:bg-dark-800 hover:text-white'
-                  }`}
+                }`}
               >
                 <span className="text-lg sm:text-xl flex-shrink-0">{item.icon}</span>
                 <span className="font-medium text-sm truncate">{item.label}</span>
@@ -146,9 +148,10 @@ export default function Layout() {
       {/* Main content */}
       <div className="lg:ml-64 flex flex-col min-h-screen">
         {/* Top bar - Sticky with shadow on scroll */}
-        <header
-          className={`sticky top-0 z-20 bg-white border-b border-gray-200 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex items-center gap-3 transition-shadow duration-200 ${scrolled ? 'shadow-md' : ''
-            }`}
+        <header 
+          className={`sticky top-0 z-20 bg-white border-b border-gray-200 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 flex items-center gap-3 transition-shadow duration-200 ${
+            scrolled ? 'shadow-md' : ''
+          }`}
         >
           <button
             onClick={() => setSidebarOpen(true)}
@@ -172,14 +175,14 @@ export default function Layout() {
 
           {/* Date Display */}
           <div className="hidden md:block text-sm text-gray-500 shrink-0">
-            {new Date().toLocaleDateString('en-IN', {
-              weekday: 'short',
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric'
+            {new Date().toLocaleDateString('en-IN', { 
+              weekday: 'short', 
+              year: 'numeric', 
+              month: 'short', 
+              day: 'numeric' 
             })}
           </div>
-
+          
           {/* Mobile Date - Compact */}
           <div className="md:hidden text-xs text-gray-400 shrink-0">
             {new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}

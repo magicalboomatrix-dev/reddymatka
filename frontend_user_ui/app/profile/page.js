@@ -190,6 +190,24 @@ const Profile = () => {
           </div>
         </section>
 
+        {/* Important Announcement */}
+        <section className="mb-4 border border-red-200 bg-[#fffdfd] shadow-[0_4px_12px_rgba(220,38,38,0.08)]">
+          <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-4 py-2.5">
+            <Info size={18} className="text-red-600" />
+            <h3 className="text-[11px] font-black uppercase tracking-[0.14em] text-red-700">Important Notice</h3>
+          </div>
+          <div className="px-4 py-3 space-y-2.5">
+            <div className="flex items-start gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"></span>
+              <p className="text-sm font-bold text-[#b91c1c]">क्वाड की पेमेंट नहीं मिलेगी</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500"></span>
+              <p className="text-sm font-bold text-[#b91c1c]">डबल जोड़ी मान्य नहीं होगी लास्ट टाइम</p>
+            </div>
+          </div>
+        </section>
+
         {/* Logout */}
         <button
           className="w-full bg-red-600 px-4 py-3 text-sm font-black uppercase tracking-[0.14em] text-white"

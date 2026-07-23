@@ -48,19 +48,19 @@ const https = require('https');
 const logger = require('./utils/logger');
 
 const REQUIRED_VARS = ['TELEGRAM_API_ID', 'TELEGRAM_API_HASH', 'TELEGRAM_SESSION',
-  'TELEGRAM_CHAT_ID', 'TELEGRAM_WEBHOOK_SECRET', 'BACKEND_PUBLIC_URL'];
+                       'TELEGRAM_CHAT_ID', 'TELEGRAM_WEBHOOK_SECRET', 'BACKEND_PUBLIC_URL'];
 const missing = REQUIRED_VARS.filter(v => !process.env[v]);
 if (missing.length > 0) {
   console.error(`[userbot] Missing required env vars: ${missing.join(', ')}`);
   process.exit(1);
 }
 
-const API_ID = parseInt(process.env.TELEGRAM_API_ID, 10);
-const API_HASH = process.env.TELEGRAM_API_HASH;
-const SESSION_STRING = process.env.TELEGRAM_SESSION;
-const ALLOWED_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID);
-const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
-const BACKEND_BASE_URL = process.env.BACKEND_PUBLIC_URL.replace(/\/$/, ''); // e.g. https://api.reddymatka.com
+const API_ID           = parseInt(process.env.TELEGRAM_API_ID, 10);
+const API_HASH         = process.env.TELEGRAM_API_HASH;
+const SESSION_STRING   = process.env.TELEGRAM_SESSION;
+const ALLOWED_CHAT_ID  = String(process.env.TELEGRAM_CHAT_ID);
+const WEBHOOK_SECRET   = process.env.TELEGRAM_WEBHOOK_SECRET;
+const BACKEND_BASE_URL = process.env.BACKEND_PUBLIC_URL.replace(/\/$/, '');
 
 // Synthetic message ids are prefixed to avoid collisions with real bot webhook message_ids.
 // Real Telegram message ids are always positive integers; we keep them as-is.
@@ -124,9 +124,9 @@ async function startUserbot() {
       autoReconnect: true,
       baseLogger: {
         // Suppress gramjs internal logs unless debug mode
-        debug: () => { },
-        info: () => { },
-        warn: (msg) => logger.warn('userbot/gramjs', msg),
+        debug: () => {},
+        info:  () => {},
+        warn:  (msg) => logger.warn ('userbot/gramjs', msg),
         error: (msg) => logger.error('userbot/gramjs', msg),
       },
     }
@@ -171,11 +171,11 @@ async function startUserbot() {
   // Graceful shutdown
   async function shutdown(signal) {
     logger.info('userbot', `Received ${signal} — disconnecting`);
-    try { await client.disconnect(); } catch (_) { }
+    try { await client.disconnect(); } catch (_) {}
     process.exit(0);
   }
   process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGINT',  () => shutdown('SIGINT'));
 }
 
 startUserbot().catch((err) => {

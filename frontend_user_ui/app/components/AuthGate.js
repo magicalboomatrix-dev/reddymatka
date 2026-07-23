@@ -12,13 +12,13 @@ const OPEN_ROUTES = ['/download'];
 
 function AppSplash({ message }) {
   const [imgError, setImgError] = useState(false);
-
+  
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-[radial-gradient(circle_at_top,#f8efcc_0%,#ffffff_48%,#eef1f5_100%)] px-6 text-center">
       <div className="rounded-[28px] border border-[#d9c07a] bg-white/90 px-8 py-10 shadow-[0_18px_50px_rgba(0,0,0,0.12)] backdrop-blur">
         {!imgError && (
-          <img
-            src="/images/logo.png"
+          <img 
+            src="/images/logo.png" 
             alt="reddymatka"
             className="mx-auto h-14 w-auto object-contain"
             onError={() => setImgError(true)}

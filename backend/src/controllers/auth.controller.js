@@ -244,17 +244,17 @@ exports.completeProfile = async (req, res, next) => {
 
     // Handle referral — bonus is deferred until the referred user's first deposit
     if (referrer) {
-      const [settings] = await conn.query("SELECT setting_value FROM settings WHERE setting_key = 'referral_bonus'");
-      const bonusAmount = settings.length > 0 ? parseFloat(settings[0].setting_value) : 0;
+        const [settings] = await conn.query("SELECT setting_value FROM settings WHERE setting_key = 'referral_bonus'");
+        const bonusAmount = settings.length > 0 ? parseFloat(settings[0].setting_value) : 0;
 
-      if (bonusAmount > 0) {
-        // Create referral record with status='pending' — bonus will be credited
-        // to the referred user (not referrer) after their first deposit
-        await conn.query(
-          'INSERT INTO referrals (referrer_id, referred_user_id, bonus_amount, status) VALUES (?, ?, ?, ?)',
-          [referrer.id, userId, bonusAmount, 'pending']
-        );
-      }
+        if (bonusAmount > 0) {
+          // Create referral record with status='pending' — bonus will be credited
+          // to the referred user (not referrer) after their first deposit
+          await conn.query(
+            'INSERT INTO referrals (referrer_id, referred_user_id, bonus_amount, status) VALUES (?, ?, ?, ?)',
+            [referrer.id, userId, bonusAmount, 'pending']
+          );
+        }
     }
 
     await conn.commit();

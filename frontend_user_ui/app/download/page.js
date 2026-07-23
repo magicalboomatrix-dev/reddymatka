@@ -123,14 +123,14 @@ export default function PlayStoreDownload() {
           <Share2 size={16} /> Share
         </button>
         <button className="flex items-center gap-1.5 font-medium">
-          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" /></svg>
+          <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
           Add to wishlist
         </button>
       </div>
 
       {/* ── Device compatibility ─────────────────────────────────── */}
       <p className="flex items-center gap-1.5 px-5 pt-4 text-xs text-[#5f6368]">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2" /><line x1="12" y1="18" x2="12.01" y2="18" /></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
         This app is available for all of your devices
       </p>
 
@@ -198,7 +198,7 @@ export default function PlayStoreDownload() {
           <div className="text-center">
             <p className="text-5xl font-light">4.5</p>
             <div className="mt-1 flex justify-center gap-0.5">
-              {[1, 2, 3, 4].map(i => <Star key={i} size={12} fill="#01875f" color="#01875f" />)}
+              {[1,2,3,4].map(i => <Star key={i} size={12} fill="#01875f" color="#01875f" />)}
               <Star size={12} fill="#01875f" color="#01875f" strokeWidth={0} className="[clip-path:inset(0_50%_0_0)]" />
             </div>
             <p className="mt-1 text-xs text-[#5f6368]">2,103</p>
@@ -231,12 +231,12 @@ export default function PlayStoreDownload() {
           </div>
           <div className="mt-2 flex items-center gap-2">
             <div className="flex gap-0.5">
-              {[1, 2, 3, 4, 5].map(i => <Star key={i} size={11} fill="#01875f" color="#01875f" />)}
+              {[1,2,3,4,5].map(i => <Star key={i} size={11} fill="#01875f" color="#01875f" />)}
             </div>
             <span className="text-xs text-[#5f6368]">March 28, 2026</span>
           </div>
           <p className="mt-2 text-sm leading-relaxed text-[#5f6368]">
-            Best app for  results. Fast, reliable and easy to use. The live updates feature is amazing!
+            Best app for satta results. Fast, reliable and easy to use. The live updates feature is amazing!
           </p>
         </div>
       </section>
@@ -252,10 +252,10 @@ function PlayStoreLogo() {
   return (
     <div className="flex items-center gap-1.5">
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734c0-.382.218-.72.609-.92z" fill="#4285F4" />
-        <path d="M17.194 8.598L14.5 10.17l.003.002L13.792 12l.711 1.828 3.401 1.97.71.413 3.08-1.78c.86-.5.86-1.32 0-1.82l-4.5-4.013z" fill="#FBBC04" />
-        <path d="M3.609 1.814L14.503 10.17l2.691-1.572L3.609 1.814z" fill="#34A853" />
-        <path d="M14.503 13.83L3.609 22.186l13.585-6.928-2.691-1.428z" fill="#EA4335" />
+        <path d="M3.609 1.814L13.792 12 3.61 22.186a.996.996 0 01-.61-.92V2.734c0-.382.218-.72.609-.92z" fill="#4285F4"/>
+        <path d="M17.194 8.598L14.5 10.17l.003.002L13.792 12l.711 1.828 3.401 1.97.71.413 3.08-1.78c.86-.5.86-1.32 0-1.82l-4.5-4.013z" fill="#FBBC04"/>
+        <path d="M3.609 1.814L14.503 10.17l2.691-1.572L3.609 1.814z" fill="#34A853"/>
+        <path d="M14.503 13.83L3.609 22.186l13.585-6.928-2.691-1.428z" fill="#EA4335"/>
       </svg>
       <span className="text-lg font-normal text-[#5f6368]">Google Play</span>
     </div>
@@ -279,10 +279,10 @@ function RatingBadge() {
   return (
     <div className="flex items-center justify-center">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#202124" strokeWidth="2">
-        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
-        <circle cx="8.5" cy="7" r="4" />
-        <line x1="18" y1="8" x2="18" y2="14" />
-        <line x1="21" y1="11" x2="15" y2="11" />
+        <path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+        <circle cx="8.5" cy="7" r="4"/>
+        <line x1="18" y1="8" x2="18" y2="14"/>
+        <line x1="21" y1="11" x2="15" y2="11"/>
       </svg>
     </div>
   );

@@ -38,28 +38,28 @@ const pool = mysql.createPool({
 
 // ── Minimal colour output (no chalk dependency) ────────────────────────────
 const C = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  green: '\x1b[32m',
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  dim: '\x1b[2m',
+  reset  : '\x1b[0m',
+  bold   : '\x1b[1m',
+  green  : '\x1b[32m',
+  red    : '\x1b[31m',
+  yellow : '\x1b[33m',
+  cyan   : '\x1b[36m',
+  dim    : '\x1b[2m',
 };
-const pass = (msg) => `  ${C.green}✔${C.reset} ${msg}`;
-const fail = (msg) => `  ${C.red}✖${C.reset} ${C.red}${msg}${C.reset}`;
-const info = (msg) => `  ${C.dim}${msg}${C.reset}`;
-const head = (title) => `\n${C.bold}${C.cyan}${title}${C.reset}`;
+const pass  = (msg)   => `  ${C.green}✔${C.reset} ${msg}`;
+const fail  = (msg)   => `  ${C.red}✖${C.reset} ${C.red}${msg}${C.reset}`;
+const info  = (msg)   => `  ${C.dim}${msg}${C.reset}`;
+const head  = (title) => `\n${C.bold}${C.cyan}${title}${C.reset}`;
 
 // ── Shared test-state (populated incrementally so cleanup always knows what to remove) ──
 const state = {
-  testUserId: null,
-  testGameId: null,
-  testBetId: null,
-  testBetNumberId: null,
-  testResultId: null,
-  testQueueId: null,
-  sessionDate: null,
+  testUserId       : null,
+  testGameId       : null,
+  testBetId        : null,
+  testBetNumberId  : null,
+  testResultId     : null,
+  testQueueId      : null,
+  sessionDate      : null,
 };
 
 // ── Result accumulator ─────────────────────────────────────────────────────
@@ -77,8 +77,8 @@ function record(name, passed, detail = null) {
 
 /** Return "YYYY-MM-DD" from a Date (local) */
 function fmtDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const y  = d.getFullYear();
+  const m  = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${dd}`;
 }
@@ -92,7 +92,7 @@ function parseTime(v) {
 
 /** Mirror of getResultDate() from game-time.js */
 function getResultDate(game, now = new Date()) {
-  const open = parseTime(game.open_time);
+  const open  = parseTime(game.open_time);
   const close = parseTime(game.close_time);
   const overnight = close.hours < open.hours || (close.hours === open.hours && close.minutes < open.minutes);
 
@@ -128,7 +128,7 @@ async function recordWalletTx(conn, { userId, type, amount, referenceType, refer
   );
   const [[wallet]] = await conn.query('SELECT balance FROM wallets WHERE user_id = ? FOR UPDATE', [userId]);
   const current = parseFloat(wallet.balance || 0);
-  const next = Math.round((current + parseFloat(amount)) * 100) / 100;
+  const next    = Math.round((current + parseFloat(amount)) * 100) / 100;
 
   await conn.query('UPDATE wallets SET balance = ? WHERE user_id = ?', [next, userId]);
   await conn.query(
@@ -156,10 +156,10 @@ function httpGet(url) {
 // ── Cleanup helper — called in finally block ──────────────────────────────
 async function cleanup(conn) {
   try {
-    if (state.testQueueId) await conn.query('DELETE FROM settlement_queue   WHERE id = ?', [state.testQueueId]);
-    if (state.testResultId) await conn.query('DELETE FROM game_results        WHERE id = ?', [state.testResultId]);
-    if (state.testBetNumberId) await conn.query('DELETE FROM bet_numbers         WHERE bet_id = ?', [state.testBetId]);
-    if (state.testBetId) await conn.query('DELETE FROM bets                WHERE id = ?', [state.testBetId]);
+    if (state.testQueueId)      await conn.query('DELETE FROM settlement_queue   WHERE id = ?', [state.testQueueId]);
+    if (state.testResultId)     await conn.query('DELETE FROM game_results        WHERE id = ?', [state.testResultId]);
+    if (state.testBetNumberId)  await conn.query('DELETE FROM bet_numbers         WHERE bet_id = ?', [state.testBetId]);
+    if (state.testBetId)        await conn.query('DELETE FROM bets                WHERE id = ?', [state.testBetId]);
     // wallet_transactions: remove test settlement row
     if (state.testBetId) {
       await conn.query(
@@ -189,8 +189,8 @@ async function cleanup(conn) {
       `, [state.testUserId]);
       await conn.query('UPDATE wallets SET balance = ? WHERE user_id = ?', [parseFloat(ledger.bal), state.testUserId]);
     }
-    if (state.testGameId) await conn.query('DELETE FROM games WHERE id = ?', [state.testGameId]);
-    if (state.testUserId) await conn.query('DELETE FROM users  WHERE id = ?', [state.testUserId]);
+    if (state.testGameId)  await conn.query('DELETE FROM games WHERE id = ?', [state.testGameId]);
+    if (state.testUserId)  await conn.query('DELETE FROM users  WHERE id = ?', [state.testUserId]);
   } catch (e) {
     console.log(info(`[cleanup] non-fatal error: ${e.message}`));
   }
@@ -203,7 +203,7 @@ async function cleanup(conn) {
 // ── T1: Column Structure ───────────────────────────────────────────────────
 async function t1_columnExists(conn) {
   const [cols] = await conn.query('SHOW COLUMNS FROM bets');
-  const found = cols.some(c => c.Field === 'session_date' && c.Type.toLowerCase().startsWith('date'));
+  const found  = cols.some(c => c.Field === 'session_date' && c.Type.toLowerCase().startsWith('date'));
   record('session_date column exists in bets table', found,
     found ? null : 'SHOW COLUMNS returned: ' + JSON.stringify(cols.map(c => `${c.Field}:${c.Type}`)));
 }
@@ -233,8 +233,8 @@ async function t3_betInsertion(conn) {
   );
   state.testGameId = gRes.insertId;
 
-  const game = { open_time: '08:00:00', close_time: '17:00:00' };
-  const now = new Date();
+  const game     = { open_time: '08:00:00', close_time: '17:00:00' };
+  const now      = new Date();
   state.sessionDate = getResultDate(game, now);
 
   // Seed wallet — reference_id includes user_id so it is unique across runs
@@ -268,7 +268,7 @@ async function t3_betInsertion(conn) {
     'SELECT session_date, created_at FROM bets WHERE id = ?',
     [state.testBetId]
   );
-  const written = bet.session_date instanceof Date
+  const written   = bet.session_date instanceof Date
     ? fmtDate(bet.session_date)
     : String(bet.session_date).slice(0, 10);
 
@@ -290,7 +290,7 @@ async function t4_settlementQueryIndex(conn) {
 
   // MySQL EXPLAIN: look for our index in 'key' or 'possible_keys' columns
   const usesIndex = rows.some(r => {
-    const k = (r.key || '').toLowerCase();
+    const k  = (r.key           || '').toLowerCase();
     const pk = (r.possible_keys || '').toLowerCase();
     return k.includes('idx_bets_game_session_status') || pk.includes('idx_bets_game_session_status');
   });
@@ -370,12 +370,12 @@ async function t5_settlementPipeline(conn) {
 
       if (totalWin > 0) {
         await recordWalletTx(conn, {
-          userId: bet.user_id,
-          type: 'win',
-          amount: totalWin,
+          userId       : bet.user_id,
+          type         : 'win',
+          amount       : totalWin,
           referenceType: 'win',
-          referenceId: `bet_${betId}`,
-          remark: '[REGTEST] Won on jodi bet',
+          referenceId  : `bet_${betId}`,
+          remark       : '[REGTEST] Won on jodi bet',
         });
       }
       settledCount++;
@@ -502,7 +502,7 @@ async function t9_settlementQueueStates(conn) {
 async function t10_apiHealth() {
   const baseUrl = `http://localhost:${process.env.PORT || 5000}`;
   const res = await httpGet(`${baseUrl}/api/health`);
-  const ok = res.status === 200;
+  const ok  = res.status === 200;
   record(
     `API health endpoint responds HTTP 200 (${baseUrl}/api/health)`,
     ok,
@@ -529,7 +529,7 @@ async function runTests() {
   console.log(`${C.bold}  BETTING PLATFORM REGRESSION TEST SUITE${C.reset}`);
   console.log(`${C.bold}${'═'.repeat(54)}${C.reset}`);
   console.log(info(`  Date : ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`));
-  console.log(info(`  DB   : ${process.env.DB_NAME || 'reddymatka'} @ ${process.env.DB_HOST || 'localhost'}`));
+  console.log(info(`  DB   : ${process.env.DB_NAME || 'REDDYMATKA'} @ ${process.env.DB_HOST || 'localhost'}`));
 
   const conn = await pool.getConnection();
 
@@ -568,7 +568,7 @@ async function runTests() {
     await conn.rollback();
     console.log(info('\n  All test fixtures rolled back.'));
   } catch (err) {
-    try { await conn.rollback(); } catch (_) { }
+    try { await conn.rollback(); } catch (_) {}
     console.log(`\n${C.red}Fatal runner error: ${err.message}${C.reset}`);
     console.log(err.stack);
   } finally {
@@ -580,7 +580,7 @@ async function runTests() {
   await t10_apiHealth();
 
   // ── Final report ──────────────────────────────────────────────────────────
-  const total = results.length;
+  const total  = results.length;
   const passed = results.filter(r => r.passed).length;
   const failed = total - passed;
 
@@ -607,6 +607,6 @@ async function runTests() {
 
 runTests().catch(async (e) => {
   console.error(`${C.red}Fatal: ${e.message}${C.reset}`);
-  await pool.end().catch(() => { });
+  await pool.end().catch(() => {});
   process.exit(1);
 });

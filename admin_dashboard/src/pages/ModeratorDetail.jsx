@@ -80,16 +80,16 @@ export default function ModeratorDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const { toasts, success, error: toastError, dismiss } = useToast();
-
+  
   const [scannerForm, setScannerForm] = useState({ upi_id: '', scanner_label: '', scanner_enabled: false });
   const [scannerEditing, setScannerEditing] = useState(false);
   const [scannerSaving, setScannerSaving] = useState(false);
-
+  
   const [pwForm, setPwForm] = useState({ newPassword: '', confirmPassword: '' });
   const [pwSaving, setPwSaving] = useState(false);
   const [pwShowNew, setPwShowNew] = useState(false);
   const [pwShowConfirm, setPwShowConfirm] = useState(false);
-
+  
   const [refCodeEditing, setRefCodeEditing] = useState(false);
   const [refCodeValue, setRefCodeValue] = useState('');
   const [refCodeSaving, setRefCodeSaving] = useState(false);
@@ -238,89 +238,75 @@ export default function ModeratorDetail() {
   // Table column definitions
   const depositColumns = [
     { header: 'Date', accessor: 'created_at', className: 'text-left', cellClass: 'text-xs text-gray-600 font-medium whitespace-nowrap', render: (row) => new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) },
-    {
-      header: 'User', accessor: 'user_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-700 uppercase">
-            {row.user_name?.slice(0, 2)}
-          </div>
-          <div>
-            <Link to={`/users/${row.user_id}`} className="text-amber-600 hover:text-amber-700 font-semibold hover:underline block leading-tight">{row.user_name}</Link>
-            <div className="text-gray-400 text-[10px] mt-0.5">{row.user_phone}</div>
-          </div>
+    { header: 'User', accessor: 'user_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-700 uppercase">
+          {row.user_name?.slice(0, 2)}
         </div>
-      )
-    },
+        <div>
+          <Link to={`/users/${row.user_id}`} className="text-amber-600 hover:text-amber-700 font-semibold hover:underline block leading-tight">{row.user_name}</Link>
+          <div className="text-gray-400 text-[10px] mt-0.5">{row.user_phone}</div>
+        </div>
+      </div>
+    )},
     { header: 'Amount', accessor: 'amount', className: 'text-right', cellClass: 'font-bold text-right text-emerald-600 text-xs sm:text-sm', render: (row) => formatCurrency(row.amount) },
     { header: 'UTR', accessor: 'utr_number', className: 'text-left', cellClass: 'font-mono text-xs font-semibold text-slate-800', render: (row) => row.utr_number || '-' },
     { header: 'Payer', accessor: 'payer_name', className: 'text-left', cellClass: 'text-xs text-gray-600 font-medium', render: (row) => row.payer_name || '-' },
-    {
-      header: 'Status', accessor: 'status', className: 'text-center', cellClass: 'text-center', render: (row) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
-          {row.status}
-        </span>
-      )
-    },
+    { header: 'Status', accessor: 'status', className: 'text-center', cellClass: 'text-center', render: (row) => (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800">
+        {row.status}
+      </span>
+    )},
   ];
 
   const assignedUserColumns = [
-    {
-      header: 'User', accessor: 'name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-bold text-indigo-600 uppercase">
-            {row.name?.slice(0, 2)}
-          </div>
-          <div>
-            <div className="font-semibold text-gray-800 leading-tight">{row.name}</div>
-            <div className="text-gray-400 text-[10px] mt-0.5">{row.phone}</div>
-          </div>
+    { header: 'User', accessor: 'name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-indigo-50 flex items-center justify-center text-[10px] font-bold text-indigo-600 uppercase">
+          {row.name?.slice(0, 2)}
         </div>
-      )
-    },
+        <div>
+          <div className="font-semibold text-gray-800 leading-tight">{row.name}</div>
+          <div className="text-gray-400 text-[10px] mt-0.5">{row.phone}</div>
+        </div>
+      </div>
+    )},
     { header: 'Balance', accessor: 'balance', className: 'text-right', cellClass: 'text-xs font-bold text-right text-slate-800', render: (row) => formatCurrency(row.balance) },
     { header: 'Deposits', accessor: 'deposit_count', className: 'text-right', cellClass: 'text-xs font-semibold text-right text-indigo-600', render: (row) => row.deposit_count },
-    {
-      header: 'Details', accessor: 'actions', className: 'text-center', cellClass: 'text-center', render: (row) => (
-        <Link to={`/users/${row.id}`} className="inline-flex items-center justify-center px-2.5 py-1 bg-amber-500 text-white text-[11px] font-semibold hover:bg-amber-600 rounded transition-colors shadow-sm">View</Link>
-      )
-    },
+    { header: 'Details', accessor: 'actions', className: 'text-center', cellClass: 'text-center', render: (row) => (
+      <Link to={`/users/${row.id}`} className="inline-flex items-center justify-center px-2.5 py-1 bg-amber-500 text-white text-[11px] font-semibold hover:bg-amber-600 rounded transition-colors shadow-sm">View</Link>
+    )},
   ];
 
   const referredUserColumns = [
-    {
-      header: 'User', accessor: 'user_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-amber-50 flex items-center justify-center text-[10px] font-bold text-amber-600 uppercase">
-            {row.user_name?.slice(0, 2)}
-          </div>
-          <div>
-            <Link to={`/users/${row.referred_user_id}`} className="text-amber-600 hover:text-amber-700 font-semibold hover:underline block leading-tight">{row.user_name}</Link>
-            <div className="text-gray-400 text-[10px] mt-0.5">{row.user_phone}</div>
-          </div>
+    { header: 'User', accessor: 'user_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
+      <div className="flex items-center gap-2">
+        <div className="w-7 h-7 rounded-full bg-amber-50 flex items-center justify-center text-[10px] font-bold text-amber-600 uppercase">
+          {row.user_name?.slice(0, 2)}
         </div>
-      )
-    },
+        <div>
+          <Link to={`/users/${row.referred_user_id}`} className="text-amber-600 hover:text-amber-700 font-semibold hover:underline block leading-tight">{row.user_name}</Link>
+          <div className="text-gray-400 text-[10px] mt-0.5">{row.user_phone}</div>
+        </div>
+      </div>
+    )},
     { header: 'Bonus', accessor: 'bonus_amount', className: 'text-right', cellClass: 'text-xs font-bold text-right text-emerald-600', render: (row) => formatCurrency(row.bonus_amount) },
-    {
-      header: 'Status', accessor: 'status', className: 'text-center', cellClass: 'text-center', render: (row) => (
-        <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded ${row.status === 'credited' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-          {row.status === 'credited' ? 'Credited' : 'Pending'}
-        </span>
-      )
-    },
+    { header: 'Status', accessor: 'status', className: 'text-center', cellClass: 'text-center', render: (row) => (
+      <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded ${row.status === 'credited' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+        {row.status === 'credited' ? 'Credited' : 'Pending'}
+      </span>
+    )},
     { header: 'Date', accessor: 'created_at', className: 'text-left', cellClass: 'text-xs text-gray-500 font-medium', render: (row) => new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) },
   ];
 
   const scannerAuditColumns = [
     { header: 'Date', accessor: 'created_at', className: 'text-left', cellClass: 'text-xs text-gray-500 font-medium whitespace-nowrap', render: (row) => new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) },
-    {
-      header: 'Changed By', accessor: 'actor_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
-        <div>
-          <div className="font-semibold text-gray-800 leading-tight">{row.actor_name || 'System'}</div>
-          <div className="text-gray-400 text-[10px] mt-0.5 capitalize">{row.actor_role || '-'}</div>
-        </div>
-      )
-    },
+    { header: 'Changed By', accessor: 'actor_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
+      <div>
+        <div className="font-semibold text-gray-800 leading-tight">{row.actor_name || 'System'}</div>
+        <div className="text-gray-400 text-[10px] mt-0.5 capitalize">{row.actor_role || '-'}</div>
+      </div>
+    )},
     { header: 'Field', accessor: 'field_name', className: 'text-left', cellClass: 'text-xs font-semibold text-slate-700', render: (row) => formatScannerAuditField(row.field_name) },
     { header: 'From', accessor: 'old_value', className: 'text-left', cellClass: 'text-xs text-gray-500 font-mono break-all', render: (row) => formatScannerAuditValue(row.field_name, row.old_value) },
     { header: 'To', accessor: 'new_value', className: 'text-left', cellClass: 'text-xs text-slate-800 font-semibold font-mono break-all', render: (row) => formatScannerAuditValue(row.field_name, row.new_value) },
@@ -334,7 +320,7 @@ export default function ModeratorDetail() {
     { id: 'audit', label: 'Scanner History', count: scannerAuditHistory.length },
   ];
 
-  const whatsappMessage = encodeURIComponent(`Hello! Click here to download the official reddymatka  APK and register using my direct agent link to get started: ${inviteLink}`);
+  const whatsappMessage = encodeURIComponent(`Hello! Click here to download the official REDDYMATKA APK and register using my direct agent link to get started: ${inviteLink}`);
   const whatsappUrl = `https://api.whatsapp.com/send?text=${whatsappMessage}`;
   const qrCodeUrl = inviteLink
     ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(inviteLink)}&color=d97706&bgcolor=ffffff&qzone=1`
@@ -352,10 +338,11 @@ export default function ModeratorDetail() {
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-lg sm:text-2xl font-bold tracking-tight truncate max-w-[200px] sm:max-w-md">{moderator.name}</h3>
-                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${moderator.is_blocked
-                  ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                  }`}>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                  moderator.is_blocked 
+                    ? 'bg-red-500/10 text-red-400 border border-red-500/20' 
+                    : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                }`}>
                   <span className={`w-2 h-2 rounded-full ${moderator.is_blocked ? 'bg-red-400' : 'bg-emerald-400 animate-pulse'}`} />
                   {moderator.is_blocked ? 'Blocked' : 'Active Moderator'}
                 </span>
@@ -367,14 +354,14 @@ export default function ModeratorDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2 self-end lg:self-auto">
-            <Link
-              to={`/jantri?moderator_id=${id}`}
+            <Link 
+              to={`/jantri?moderator_id=${id}`} 
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-amber-500 text-slate-900 hover:bg-amber-400 text-xs sm:text-sm font-bold rounded-xl transition-all shadow-md shadow-amber-500/10 hover:shadow-amber-500/25 active:scale-95"
             >
               <FileText size={16} /> View Jantri
             </Link>
-            <Link
-              to="/moderators"
+            <Link 
+              to="/moderators" 
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white text-xs sm:text-sm font-semibold rounded-xl border border-slate-700/50 transition-all active:scale-95"
             >
               <ArrowLeft size={16} /> Back
@@ -444,10 +431,10 @@ export default function ModeratorDetail() {
 
       {/* ── Desktop View Sidebar/Tab Control and Overview Grid ─────────────────── */}
       <div className={`grid grid-cols-1 lg:grid-cols-3 gap-6 ${activeTab !== 'overview' ? 'hidden lg:grid' : ''}`}>
-
+        
         {/* Column 1 & 2: Main Profile and Scanner configuration */}
         <div className="lg:col-span-2 space-y-6">
-
+          
           {/* Moderator Details Card */}
           <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -504,7 +491,7 @@ export default function ModeratorDetail() {
                   )}
                 </div>
                 {!refCodeEditing && (
-                  <button
+                  <button 
                     onClick={() => { setRefCodeValue(moderator.referral_code || ''); setRefCodeEditing(true); }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-[11px] font-semibold text-slate-700 rounded-lg transition-colors"
                   >
@@ -526,10 +513,11 @@ export default function ModeratorDetail() {
               </div>
               <button
                 onClick={() => setScannerEditing((v) => !v)}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${scannerEditing
-                  ? 'bg-slate-100 hover:bg-slate-200 text-slate-500'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow active:scale-95'
-                  }`}
+                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                  scannerEditing 
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-500' 
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow active:scale-95'
+                }`}
               >
                 {scannerEditing ? 'Cancel' : <><Edit2 size={12} /> Edit Scanner</>}
               </button>
@@ -586,7 +574,7 @@ export default function ModeratorDetail() {
               </form>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-slate-600 text-xs sm:text-sm">
-
+                
                 <div className="border border-slate-50 rounded-xl p-3 flex items-start gap-2.5">
                   <Smartphone size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
                   <div>
@@ -599,8 +587,9 @@ export default function ModeratorDetail() {
                   <Shield size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Scanner Status</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${moderator.scanner_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                      }`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${
+                      moderator.scanner_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                    }`}>
                       {moderator.scanner_enabled ? 'Active/Visible' : 'Inactive/Hidden'}
                     </span>
                   </div>
@@ -618,7 +607,7 @@ export default function ModeratorDetail() {
                         <span>User: <strong className="text-slate-600 font-bold">{upiDetails.username}</strong></span>
                         <span>Handle: <strong className="text-slate-600 font-bold">@{upiDetails.handle}</strong></span>
                         <span className="inline-flex items-center gap-0.5">
-                          Format:
+                          Format: 
                           <strong className={upiDetails.isValid ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}>
                             {upiDetails.isValid ? 'Valid' : 'Invalid'}
                           </strong>
@@ -636,9 +625,9 @@ export default function ModeratorDetail() {
 
         {/* Column 3: The Premium Agent Link & APK Download QR Section */}
         <div className="space-y-6">
-
+          
           <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-5 flex flex-col items-center">
-
+            
             {/* Title Block */}
             <div className="w-full text-center border-b border-slate-100 pb-3">
               <h4 className="text-base font-bold text-slate-800 flex items-center justify-center gap-2">
@@ -653,9 +642,9 @@ export default function ModeratorDetail() {
               <div className="relative group">
                 <div className="absolute -inset-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-2xl blur opacity-10 group-hover:opacity-20 transition duration-300"></div>
                 <div className="relative bg-white border border-slate-100 p-3 rounded-2xl shadow-inner">
-                  <img
-                    src={qrCodeUrl}
-                    alt="Agent Registration QR"
+                  <img 
+                    src={qrCodeUrl} 
+                    alt="Agent Registration QR" 
                     className="w-44 h-44 sm:w-48 sm:h-48 object-contain rounded"
                   />
                   <div className="absolute bottom-1 right-1 bg-amber-500 text-slate-900 w-6 h-6 rounded-lg flex items-center justify-center shadow">
@@ -680,14 +669,15 @@ export default function ModeratorDetail() {
                   value={inviteLink || 'No referral code set'}
                   className="flex-1 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-mono px-3 py-2.5 rounded-xl focus:outline-none text-ellipsis overflow-hidden"
                 />
-
+                
                 {inviteLink && (
                   <button
                     onClick={handleCopyLink}
-                    className={`p-2.5 rounded-xl border shadow-sm transition-all flex-shrink-0 active:scale-90 ${copied
-                      ? 'bg-emerald-600 border-emerald-600 text-white'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                      }`}
+                    className={`p-2.5 rounded-xl border shadow-sm transition-all flex-shrink-0 active:scale-90 ${
+                      copied 
+                        ? 'bg-emerald-600 border-emerald-600 text-white' 
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
                     title="Copy invite URL"
                   >
                     {copied ? <Check size={15} /> : <Copy size={15} />}
@@ -699,7 +689,7 @@ export default function ModeratorDetail() {
             {/* Quick Actions (WhatsApp, Browser, Download QR) */}
             {inviteLink && (
               <div className="w-full grid grid-cols-2 gap-2 text-xs">
-
+                
                 {/* WhatsApp Action */}
                 <a
                   href={whatsappUrl}
@@ -723,7 +713,7 @@ export default function ModeratorDetail() {
 
               </div>
             )}
-
+            
           </div>
 
         </div>
@@ -739,17 +729,19 @@ export default function ModeratorDetail() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex-shrink-0 px-4 py-3 text-xs sm:text-sm font-semibold tracking-wide border-b-2 transition-all relative whitespace-nowrap ${isActive
-                  ? 'border-amber-500 text-amber-600 font-bold'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-                  }`}
+                className={`flex-shrink-0 px-4 py-3 text-xs sm:text-sm font-semibold tracking-wide border-b-2 transition-all relative whitespace-nowrap ${
+                  isActive
+                    ? 'border-amber-500 text-amber-600 font-bold'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
               >
                 {tab.label}
                 {tab.count !== null && (
-                  <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive
-                    ? 'bg-amber-500 text-slate-900'
-                    : 'bg-slate-100 text-slate-500'
-                    }`}>
+                  <span className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                    isActive 
+                      ? 'bg-amber-500 text-slate-900' 
+                      : 'bg-slate-100 text-slate-500'
+                  }`}>
                     {tab.count}
                   </span>
                 )}
@@ -760,10 +752,11 @@ export default function ModeratorDetail() {
       </div>
 
       {/* ── Table Containers ────────────────────────────────────────────── */}
-
+      
       {/* 1. Deposits Tab */}
-      <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${activeTab !== 'overview' && activeTab !== 'deposits' ? 'hidden lg:block' : ''
-        }`}>
+      <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${
+        activeTab !== 'overview' && activeTab !== 'deposits' ? 'hidden lg:block' : ''
+      }`}>
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <TrendingUp size={16} className="text-amber-500" />
@@ -771,9 +764,9 @@ export default function ModeratorDetail() {
           </div>
           <span className="bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-bold rounded-full">{deposits.length} records</span>
         </div>
-        <PaginatedTable
-          data={deposits}
-          columns={depositColumns}
+        <PaginatedTable 
+          data={deposits} 
+          columns={depositColumns} 
           emptyMessage="No deposit transactions recorded for this moderator"
           rowsPerPage={10}
           maxHeight="400px"
@@ -781,11 +774,13 @@ export default function ModeratorDetail() {
       </div>
 
       {/* 2. Assigned Users Grid & Referred Users */}
-      <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 ${activeTab !== 'overview' && activeTab !== 'users' && activeTab !== 'referrals' ? 'hidden lg:grid' : ''
-        }`}>
+      <div className={`grid grid-cols-1 xl:grid-cols-2 gap-6 ${
+        activeTab !== 'overview' && activeTab !== 'users' && activeTab !== 'referrals' ? 'hidden lg:grid' : ''
+      }`}>
         {/* Assigned Users Card */}
-        <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${activeTab !== 'overview' && activeTab !== 'users' ? 'hidden xl:block' : ''
-          }`}>
+        <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${
+          activeTab !== 'overview' && activeTab !== 'users' ? 'hidden xl:block' : ''
+        }`}>
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users size={16} className="text-amber-500" />
@@ -793,9 +788,9 @@ export default function ModeratorDetail() {
             </div>
             <span className="bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-bold rounded-full">{assignedUsers.length} active</span>
           </div>
-          <PaginatedTable
-            data={assignedUsers}
-            columns={assignedUserColumns}
+          <PaginatedTable 
+            data={assignedUsers} 
+            columns={assignedUserColumns} 
             emptyMessage="No users are currently assigned directly under this agent"
             rowsPerPage={10}
             maxHeight="400px"
@@ -803,8 +798,9 @@ export default function ModeratorDetail() {
         </div>
 
         {/* Referred Users Card */}
-        <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${activeTab !== 'overview' && activeTab !== 'referrals' ? 'hidden xl:block' : ''
-          }`}>
+        <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${
+          activeTab !== 'overview' && activeTab !== 'referrals' ? 'hidden xl:block' : ''
+        }`}>
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ExternalLink size={16} className="text-amber-500" />
@@ -812,9 +808,9 @@ export default function ModeratorDetail() {
             </div>
             <span className="bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-bold rounded-full">{referredUsers.length} referrals</span>
           </div>
-          <PaginatedTable
-            data={referredUsers}
-            columns={referredUserColumns}
+          <PaginatedTable 
+            data={referredUsers} 
+            columns={referredUserColumns} 
             emptyMessage="No referrals linked to this agent yet"
             rowsPerPage={10}
             maxHeight="400px"
@@ -823,8 +819,9 @@ export default function ModeratorDetail() {
       </div>
 
       {/* 3. Scanner Change History Card */}
-      <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${activeTab !== 'overview' && activeTab !== 'audit' ? 'hidden lg:block' : ''
-        }`}>
+      <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${
+        activeTab !== 'overview' && activeTab !== 'audit' ? 'hidden lg:block' : ''
+      }`}>
         <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Smartphone size={16} className="text-amber-500" />
@@ -832,9 +829,9 @@ export default function ModeratorDetail() {
           </div>
           <span className="bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-bold rounded-full">{scannerAuditHistory.length} events</span>
         </div>
-        <PaginatedTable
-          data={scannerAuditHistory}
-          columns={scannerAuditColumns}
+        <PaginatedTable 
+          data={scannerAuditHistory} 
+          columns={scannerAuditColumns} 
           emptyMessage="No modifications are recorded in the scanner audit log"
           rowsPerPage={10}
           maxHeight="400px"
@@ -844,7 +841,7 @@ export default function ModeratorDetail() {
       {/* ── Bottom Section (Overview Only) ────────────────────────────── */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
+          
           {/* Recent Agent Notifications */}
           <div className="bg-white border border-slate-100 rounded-2xl p-5 shadow-sm space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -854,7 +851,7 @@ export default function ModeratorDetail() {
               </div>
               <span className="bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-bold rounded-full">{notifications.length} alerts</span>
             </div>
-
+            
             <div className="space-y-3.5 max-h-[320px] overflow-y-auto pr-1">
               {notifications.slice(0, 10).map((notification) => (
                 <div key={notification.id} className="border border-slate-100 bg-slate-50/20 px-4 py-3 rounded-xl flex items-start gap-3 hover:bg-slate-50/50 transition-colors">

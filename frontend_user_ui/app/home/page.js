@@ -532,7 +532,7 @@ const HomePage = () => {
                       <div className="mt-2 grid grid-cols-[1fr_1fr_1.2fr] gap-2">
                         <div className="bg-[#e6f3ff] p-2 text-center text-sm font-black text-[#11446b]">
                           {/* Show last declared result (from prior session if current has none) */}
-                          {game.last_result_number || game.result_number || "-"}
+                          {game.last_result_number || "-"}
                         </div>
                         <div className="bg-[#ffe8ef] backdrop-blur-[1px] p-2 text-center text-sm font-black text-[#000000]">
                           {/* Show today's result if visible, else lock */}

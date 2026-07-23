@@ -44,7 +44,7 @@ exports.handleWebhook = async (req, res) => {
     }
 
     // Skip system alert messages (not UPI messages)
-    if (rawText.includes('Ledger Drift Detected') || rawText.includes('reddymatka — Ledger') || rawText.startsWith('🔴 **reddymatka')) {
+    if (rawText.includes('Ledger Drift Detected') || rawText.includes('REDDYMATKA — Ledger') || rawText.startsWith('🔴 **REDDYMATKA')) {
       logger.info('telegram', 'Skipping system alert message', { messageId, preview: rawText.substring(0, 60) });
       return;
     }
