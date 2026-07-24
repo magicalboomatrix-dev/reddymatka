@@ -28,5 +28,7 @@ router.get('/upi-management', authenticate, authorize('admin'), adminController.
 router.put('/upi-management/admin-upi', authenticate, authorize('admin'), adminActivity('update_admin_upi', 'settings'), adminController.updateAdminUpi);
 router.get('/referrals', authenticate, authorize('admin'), adminController.listReferrals);
 router.get('/financial-report', authenticate, authorize('admin'), adminController.getFinancialReport);
+router.get('/system-alerts', authenticate, authorize('admin'), adminController.getSystemAlerts);
+router.put('/system-alerts/:id/resolve', authenticate, authorize('admin'), adminActivity('resolve_system_alert', 'system_alerts'), adminController.resolveSystemAlert);
 
 module.exports = router;

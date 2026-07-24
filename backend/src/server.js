@@ -22,7 +22,6 @@ const moderatorSelfRoutes = require('./routes/moderator-self.routes');
 const adminRoutes = require('./routes/admin.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const customAdsRoutes = require('./routes/home-banner.routes');
-const telegramRoutes = require('./routes/telegram.routes');
 const smsWebhookRoutes = require('./routes/sms-webhook.routes');
 const autoDepositRoutes = require('./routes/auto-deposit.routes');
 const settlementMonitorRoutes = require('./routes/settlement-monitor.routes');
@@ -60,7 +59,6 @@ const routeRegistrations = [
   ['/api/admin', adminRoutes],
   ['/api/notifications', notificationRoutes],
   ['/api/custom-ads', customAdsRoutes],
-  ['/api/telegram', telegramRoutes],
   ['/api/sms', smsWebhookRoutes],
   ['/api/auto-deposit', autoDepositRoutes],
   ['/api/settlement-monitor', settlementMonitorRoutes],

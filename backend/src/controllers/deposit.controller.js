@@ -1,9 +1,9 @@
-﻿/**
+/**
  * Deposit Controller (refactored)
  *
  * All manual deposit verification has been removed.
  * Deposits are now created exclusively by the auto-deposit matching engine
- * (Telegram webhook -> UPI parser -> matcher -> wallet credit).
+ * (SMS webhook -> UPI parser -> matcher -> wallet credit).
  *
  * This controller only exposes read-only endpoints for deposit history.
  */

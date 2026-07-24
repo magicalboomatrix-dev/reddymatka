@@ -1,6 +1,3 @@
-'use strict';
-const https = require('https');
-
 /**
  * Financial Watchdog Service
  *
@@ -11,16 +8,9 @@ const https = require('https');
  *   2. Stale ("processing" for > 10 min) settlement jobs
  *   3. Wallet ledger drift — total wallet balances vs last N transactions
  *
- * Alerts are sent via the Telegram Bot API to the configured admin chat.
+ * Alerts are written to the logger.
  * The watchdog never throws — all errors are swallowed so it cannot affect
  * the HTTP server or worker process that hosts it.
- *
- * Environment variables required for Telegram alerts:
- *   TELEGRAM_BOT_TOKEN   — bot token from BotFather
- *   TELEGRAM_ALERT_CHAT  — chat_id to deliver alerts to (can differ from
- *                          the UPI webhook chat)
- *
- * If those vars are absent, alerts are only written to the logger.
  */
 
 const pool = require('../config/database');
@@ -35,54 +25,6 @@ const ALERT_COOLDOWN_TICKS = 3; // 3 × interval ≈ 15 min at default 5-min int
 let intervalId = null;
 let failedSettlementCooldown = 0;
 let staleJobCooldown = 0;
-
-// ── Telegram helper ───────────────────────────────────────────────────────────
-async function sendTelegramAlert(message) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_ALERT_CHAT || process.env.TELEGRAM_CHAT_ID;
-
-  if (!token || !chatId) {
-    // No Telegram config — alert stays in logs only
-    return;
-  }
-
-  return new Promise((resolve) => {
-    try {
-      const body = JSON.stringify({ chat_id: chatId, text: message, parse_mode: 'HTML' });
-      const options = {
-        hostname: 'api.telegram.org',
-        path: `/bot${token}/sendMessage`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(body),
-        },
-      };
-
-      const req = https.request(options, (res) => {
-        let data = '';
-        res.on('data', (chunk) => { data += chunk; });
-        res.on('end', () => {
-          if (res.statusCode !== 200) {
-            logger.warn('watchdog', 'Telegram alert delivery failed', { status: res.statusCode, body: data });
-          }
-          resolve();
-        });
-      });
-
-      req.on('error', (err) => {
-        logger.warn('watchdog', 'Telegram alert error', { message: err.message });
-        resolve();
-      });
-
-      req.write(body);
-      req.end();
-    } catch (err) {
-      logger.warn('watchdog', 'Telegram alert error', { message: err.message });
-      resolve();
-    }
-  });
-}
 
 // ── Checks ────────────────────────────────────────────────────────────────────
 
@@ -102,14 +44,15 @@ async function checkFailedSettlements() {
     return;
   }
 
-  const alertMsg =
-    `🚨 <b>reddymatka — Settlement Alert</b>\n\n` +
-    `${cnt} settlement job(s) are in <b>FAILED</b> status.\n` +
-    `Go to Settlement Monitor → retry failed jobs.\n\n` +
-    `<i>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</i>`;
-
   logger.warn('watchdog', `${cnt} failed settlement job(s) detected`);
-  await sendTelegramAlert(alertMsg);
+  try {
+    await pool.query(
+      'INSERT INTO system_alerts (level, context, message, data) VALUES (?, ?, ?, ?)',
+      ['warn', 'watchdog', `${cnt} failed settlement job(s) detected`, JSON.stringify({ count: cnt })]
+    );
+  } catch (err) {
+    logger.error('watchdog', 'Failed to insert alert into DB', err);
+  }
   failedSettlementCooldown = ALERT_COOLDOWN_TICKS;
 }
 
@@ -132,15 +75,15 @@ async function checkStaleJobs() {
     return;
   }
 
-  const alertMsg =
-    `⚠️ <b>reddymatka — Stale Settlement Jobs</b>\n\n` +
-    `${cnt} job(s) have been in <b>PROCESSING</b> state for ` +
-    `more than ${STALE_PROCESSING_MINUTES} minutes.\n` +
-    `The settlement worker may have crashed.\n\n` +
-    `<i>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</i>`;
-
   logger.warn('watchdog', `${cnt} stale settlement job(s) detected`);
-  await sendTelegramAlert(alertMsg);
+  try {
+    await pool.query(
+      'INSERT INTO system_alerts (level, context, message, data) VALUES (?, ?, ?, ?)',
+      ['warn', 'watchdog', `${cnt} stale settlement job(s) detected`, JSON.stringify({ count: cnt })]
+    );
+  } catch (err) {
+    logger.error('watchdog', 'Failed to insert alert into DB', err);
+  }
   staleJobCooldown = ALERT_COOLDOWN_TICKS;
 }
 
@@ -165,16 +108,15 @@ async function checkLedgerDrift() {
   const drift = Math.abs(walletTotal - txnTotal);
 
   if (drift > 0.01) {
-    const alertMsg =
-      `🔴 <b>reddymatka — Ledger Drift Detected</b>\n\n` +
-      `Wallet balances total: <b>₹${walletTotal.toFixed(2)}</b>\n` +
-      `Transaction net total: <b>₹${txnTotal.toFixed(2)}</b>\n` +
-      `Drift: <b>₹${drift.toFixed(2)}</b>\n\n` +
-      `Investigate wallet_transactions immediately.\n\n` +
-      `<i>${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST</i>`;
-
     logger.error('watchdog', 'Ledger drift detected', { walletTotal, txnTotal, drift });
-    await sendTelegramAlert(alertMsg);
+    try {
+      await pool.query(
+        'INSERT INTO system_alerts (level, context, message, data) VALUES (?, ?, ?, ?)',
+        ['error', 'watchdog', 'Ledger drift detected', JSON.stringify({ walletTotal, txnTotal, drift })]
+      );
+    } catch (err) {
+      logger.error('watchdog', 'Failed to insert alert into DB', err);
+    }
   }
 }
 

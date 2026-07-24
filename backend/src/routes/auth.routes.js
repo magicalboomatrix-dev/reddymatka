@@ -4,6 +4,19 @@ const rateLimit = require('express-rate-limit');
 const authController = require('../controllers/auth.controller');
 const { authenticate } = require('../middleware/auth.middleware');
 
+// 3 OTP sends per phone number per 15 minutes to prevent SMS toll fraud
+const otpSendLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3,
+  keyGenerator: (req) => {
+    const phone = String(req.body?.phone || '').replace(/\D/g, '').slice(-10);
+    return phone || req.ip;
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many OTP requests. Please wait 15 minutes and try again.' },
+});
+
 // 5 OTP verification attempts per phone number per minute.
 // Keyed on the normalised phone from the request body (falls back to IP).
 const otpVerifyLimiter = rateLimit({
@@ -19,7 +32,7 @@ const otpVerifyLimiter = rateLimit({
 });
 
 router.post('/check-user', authController.checkUser);
-router.post('/send-otp', authController.sendOTP);
+router.post('/send-otp', otpSendLimiter, authController.sendOTP);
 router.post('/verify-otp', otpVerifyLimiter, authController.verifyOTP);
 router.post('/complete-profile', authController.completeProfile);
 router.post('/set-mpin', authenticate, authController.setMpin);

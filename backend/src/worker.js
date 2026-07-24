@@ -33,7 +33,7 @@ async function main() {
   await eventBus.initPublisher();
   startAutoSettle();
   startBetReconciliationWorker();
-  startWatchdog(); // financial watchdog — 5-min checks, Telegram alerts
+  startWatchdog(); // financial watchdog — 5-min checks, system alerts
 
   // Graceful shutdown
   function shutdown(signal) {

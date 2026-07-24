@@ -14,7 +14,7 @@ const webhookLimiter = rateLimit({
 
 /**
  * Route: POST /api/sms/webhook/:token
- * Token matches SMS_WEBHOOK_SECRET or TELEGRAM_WEBHOOK_SECRET.
+ * Token matches SMS_WEBHOOK_SECRET.
  */
 router.post('/webhook/:token', webhookLimiter, smsWebhookController.handleWebhook);
 

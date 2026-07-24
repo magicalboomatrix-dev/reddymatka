@@ -1,4 +1,4 @@
-﻿import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -13,6 +13,7 @@ import Settings from './pages/Settings';
 import Jantri from './pages/Jantri';
 import Notifications from './pages/Notifications';
 import FraudLogs from './pages/FraudLogs';
+import SystemAlerts from './pages/SystemAlerts';
 import ModeratorDetail from './pages/ModeratorDetail';
 import UserDetail from './pages/UserDetail';
 import Results from './pages/Results';
@@ -45,6 +46,7 @@ const APP_ROUTES = [
   { path: 'jantri', element: <Jantri /> },
   { path: 'notifications', element: <Notifications /> },
   { path: 'fraud-logs', element: <FraudLogs /> },
+  { path: 'system-alerts', element: <SystemAlerts /> },
   { path: 'custom-ads', element: <CustomAds /> },
   { path: 'settlement-monitor', element: <SettlementMonitor /> },
   { path: 'wallet-transactions', element: <WalletTransactions /> },

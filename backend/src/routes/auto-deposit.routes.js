@@ -32,7 +32,7 @@ router.post('/order/:id/cancel', authenticate, autoDepositController.cancelOrder
 
 // ========== ADMIN ROUTES ==========
 
-// View webhook transactions (UPI messages from Telegram)
+// View webhook transactions (UPI messages from SMS webhook)
 router.get('/admin/webhook-transactions', authenticate, authorize('admin'), autoDepositController.getWebhookTransactions);
 
 // Clear webhook transactions older than 24 hours

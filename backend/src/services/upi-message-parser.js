@@ -1,6 +1,6 @@
 /**
  * UPI Message Parser
- * Parses forwarded bank SMS / UPI app notifications from Telegram.
+ * Parses forwarded bank SMS / UPI app notifications from the SMS webhook.
  *
  * Supported formats:
  *   - Bank SMS: "Rs.500 credited to A/c XX1234 by UPI Ref 412345678901"

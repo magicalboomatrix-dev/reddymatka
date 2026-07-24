@@ -1573,3 +1573,56 @@ exports.getFinancialReport = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.getSystemAlerts = async (req, res, next) => {
+  try {
+    const { status = 'open', page = 1, limit = 50 } = req.query;
+    const offset = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
+
+    const whereClause = status === 'all' ? '' : 'WHERE status = ?';
+    const params = status === 'all' ? [] : [status];
+
+    const [countResult] = await pool.query(`SELECT COUNT(*) as total FROM system_alerts ${whereClause}`, params);
+    const [alerts] = await pool.query(
+      `SELECT sa.*, u.name as resolved_by_name 
+       FROM system_alerts sa
+       LEFT JOIN users u ON u.id = sa.resolved_by
+       ${whereClause}
+       ORDER BY sa.created_at DESC
+       LIMIT ? OFFSET ?`,
+      [...params, parseInt(limit, 10), offset]
+    );
+
+    res.json({
+      alerts,
+      pagination: {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / parseInt(limit, 10)),
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.resolveSystemAlert = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const [result] = await pool.query(
+      `UPDATE system_alerts 
+       SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP, resolved_by = ? 
+       WHERE id = ? AND status = 'open'`,
+      [req.user.id, id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Alert not found or already resolved.' });
+    }
+
+    res.json({ message: 'Alert marked as resolved.' });
+  } catch (error) {
+    next(error);
+  }
+};

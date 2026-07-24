@@ -1,6 +1,6 @@
 /**
- * Auto Deposit Matcher
- * Matches incoming UPI transactions (from Telegram) to pending deposit orders.
+ * Auto-Deposit Matcher Service
+ * Matches incoming UPI transactions (from SMS webhook) to pending deposit orders.
  * Handles wallet crediting, bonus application, and notification in a single atomic transaction.
  */
 
@@ -92,7 +92,7 @@ async function matchAndCreditDeposit({ amount, referenceNumber, payerName, txnTi
 
     // 3. Find matching pending order (priority: order_ref → pay_amount)
     //    Also checks recently-expired orders within a grace window so that
-    //    late-arriving Telegram messages (bank SMS delay) can still be credited.
+    //    late-arriving SMS messages (bank SMS delay) can still be credited.
     let pendingOrders = [];
     let lateMatch = false;
 

@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import AdminCommandBar from './AdminCommandBar';
@@ -17,6 +17,7 @@ const navItems = [
   { path: '/jantri', label: 'Jantri', icon: '🔢' },
   { path: '/notifications', label: 'Notifications', icon: '🔔' },
   { path: '/fraud-logs', label: 'Fraud Alerts', icon: '🚨' },
+  { path: '/system-alerts', label: 'System Alerts', icon: '⚠️' },
   { path: '/settlement-monitor', label: 'Settlement Monitor', icon: '⚙️' },
   { path: '/wallet-transactions', label: 'Wallet Transactions', icon: '🔍' },
   { path: '/bonus-transactions', label: 'Bonus Transactions', icon: '🎁' },
@@ -29,7 +30,7 @@ const navItems = [
   { path: '/support', label: 'Support', icon: '🎫' },
 ];
 
-const MODERATOR_HIDDEN_LABELS = new Set(['Moderators', 'Games', 'Results', 'Settings', 'Fraud Alerts', 'UPI Management', 'Settlement Monitor', 'Wallet Transactions', 'Bonus Transactions', 'Financial Report', 'Wallet Audit', 'Custom Ads', 'How To Play', 'Referrals']);
+const MODERATOR_HIDDEN_LABELS = new Set(['Moderators', 'Games', 'Results', 'Settings', 'Fraud Alerts', 'System Alerts', 'UPI Management', 'Settlement Monitor', 'Wallet Transactions', 'Bonus Transactions', 'Financial Report', 'Wallet Audit', 'Custom Ads', 'How To Play', 'Referrals']);
 const ADMIN_HIDDEN_LABELS = new Set(['My UPI / Scanner']);
 
 function isNavItemActive(locationPathname, itemPath) {

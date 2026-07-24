@@ -1199,7 +1199,7 @@ export default function AutoDeposits() {
       {tab === 'unmatched' && (
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm text-dark-500">UPI payments received via Telegram that haven't been matched to any deposit order.</p>
+            <p className="text-sm text-dark-500">UPI payments received via SMS that haven't been matched to any deposit order.</p>
             <button
               onClick={loadUnmatchedTxns}
               title="Refresh (R)"

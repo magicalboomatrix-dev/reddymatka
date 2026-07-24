@@ -1,7 +1,7 @@
 /**
  * SMS Webhook Controller
  * Receives forwarded UPI bank SMS messages directly from a mobile SMS forwarder app
- * and triggers auto-deposit matching, bypassing Telegram.
+ * and triggers auto-deposit matching.
  */
 
 const pool = require('../config/database');
@@ -15,9 +15,8 @@ const eventBus = require('../utils/event-bus');
  * SMS Forwarder app sends SMS content here.
  */
 exports.handleWebhook = async (req, res) => {
-  // Verify token
   const token = req.params.token;
-  const expectedToken = process.env.SMS_WEBHOOK_SECRET || process.env.TELEGRAM_WEBHOOK_SECRET;
+  const expectedToken = process.env.SMS_WEBHOOK_SECRET;
 
   if (!expectedToken || token !== expectedToken) {
     logger.warn('sms-webhook', 'Webhook rejected: invalid token', { ip: req.ip });
@@ -45,7 +44,7 @@ exports.handleWebhook = async (req, res) => {
     const rawId = payload.id || payload.message_id || payload.msg_id || payload.timestamp;
     const msgUniqueId = rawId ? String(rawId).trim() : `gen_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 
-    // Map to synthetic Telegram columns so we reuse the database structure & dashboard UI
+    // Map to synthetic columns so we reuse the database structure & dashboard UI
     const chatId = 'sms_forwarder';
     const messageId = `sms_${sender.replace(/[^a-zA-Z0-9]/g, '')}_${msgUniqueId}`;
 
@@ -56,10 +55,9 @@ exports.handleWebhook = async (req, res) => {
       preview: rawText.substring(0, 80),
     });
 
-    // Check if this message was already processed (idempotency)
     const [existing] = await pool.query(
       `SELECT id, status FROM upi_webhook_transactions
-       WHERE telegram_message_id = ? AND telegram_chat_id = ? AND status != 'parse_error' LIMIT 1`,
+       WHERE sms_message_id = ? AND sms_sender_id = ? AND status != 'parse_error' LIMIT 1`,
       [messageId, chatId]
     );
 
@@ -72,10 +70,9 @@ exports.handleWebhook = async (req, res) => {
     const parsed = parseUpiMessage(rawText);
 
     if (!parsed.success) {
-      // Store the unparseable message for debugging (upsert so retries overwrite the old error row)
       await pool.query(
         `INSERT INTO upi_webhook_transactions
-          (raw_message, status, error_message, telegram_message_id, telegram_chat_id)
+          (raw_message, status, error_message, sms_message_id, sms_sender_id)
          VALUES (?, 'parse_error', ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            raw_message = VALUES(raw_message),
@@ -93,7 +90,7 @@ exports.handleWebhook = async (req, res) => {
 
     // Remove stale parse_error row if it previously failed
     await pool.query(
-      "DELETE FROM upi_webhook_transactions WHERE telegram_message_id = ? AND telegram_chat_id = ? AND status = 'parse_error'",
+      "DELETE FROM upi_webhook_transactions WHERE sms_message_id = ? AND sms_sender_id = ? AND status = 'parse_error'",
       [messageId, chatId]
     );
 
@@ -102,7 +99,7 @@ exports.handleWebhook = async (req, res) => {
     try {
       [insertResult] = await pool.query(
         `INSERT INTO upi_webhook_transactions
-          (raw_message, amount, reference_number, payer_name, txn_time, status, telegram_message_id, telegram_chat_id)
+          (raw_message, amount, reference_number, payer_name, txn_time, status, sms_message_id, sms_sender_id)
          VALUES (?, ?, ?, ?, ?, 'received', ?, ?)`,
         [rawText.substring(0, 65000), amount, referenceNumber, payerName?.substring(0, 140), txnTime?.substring(0, 45), messageId, chatId]
       );
