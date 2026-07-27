@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
 import PaginatedTable from '../components/PaginatedTable';
-import { toastError, success } from '../components/ui';
+import { useToast, ToastContainer } from '../components/ui';
 
 export default function SystemAlerts() {
+  const { toasts, success, error: toastError, dismiss } = useToast();
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('open'); // 'open', 'resolved', 'all'
@@ -23,7 +24,7 @@ export default function SystemAlerts() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, page]);
+  }, [statusFilter, page, toastError]);
 
   useEffect(() => {
     loadAlerts();
@@ -50,6 +51,7 @@ export default function SystemAlerts() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-fade-in">
+      <ToastContainer toasts={toasts} dismiss={dismiss} />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
