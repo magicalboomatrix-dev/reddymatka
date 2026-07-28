@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
 export const metadata = {
-  title: 'Terms and Conditions – reddymatka',
+  title: 'Terms and Conditions – REDDYMATKA',
   description: 'Read the Terms and Conditions for using reddymatka.com.',
 }
 

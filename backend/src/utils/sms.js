@@ -17,7 +17,7 @@ async function sendTwilioOtp({ phone, otp }) {
 
   const client = twilio(accountSid, authToken);
   const message = await client.messages.create({
-    body: `Your reddymatka  OTP is: ${otp}. Valid for 5 minutes. Do not share with anyone.`,
+    body: `Your REDDYMATKA  OTP is: ${otp}. Valid for 5 minutes. Do not share with anyone.`,
     from: fromNumber,
     to: normalizedPhone,
   });
