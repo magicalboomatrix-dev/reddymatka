@@ -13,7 +13,7 @@ import { translations } from '../lib/translations'
 const getMethods = (t) => [
   { key: 'bank', label: t(translations.bankAccounts.title) },
   { key: 'upi', label: 'UPI ID' },
-  { key: 'phone', label: 'Phone / UPI Number' },
+  { key: 'phone', label: 'Number' },
   { key: 'scanner', label: 'Scanner' },
 ]
 
