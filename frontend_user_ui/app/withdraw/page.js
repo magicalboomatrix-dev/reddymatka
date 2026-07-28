@@ -13,7 +13,7 @@ import { translations } from '../lib/translations'
 const getMethods = (t) => [
   { key: 'bank', label: t(translations.bankAccounts.title) },
   { key: 'upi', label: 'UPI ID' },
-  { key: 'phone', label: 'Number' },
+  { key: 'phone', label: 'Mobile Number' },
   { key: 'scanner', label: 'Scanner' },
 ]
 
@@ -347,7 +347,7 @@ const WithDrawPage = () => {
                   <input
                     className="h-11 w-full border border-[#d8d1c4] bg-[#faf7f0] px-4 text-sm"
                     type="tel"
-                    placeholder="Enter 10-digit Phone / UPI Number"
+                    placeholder="Enter 10-digit Mobile Number"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 13))}
                     required
