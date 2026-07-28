@@ -371,9 +371,9 @@ const HomePage = () => {
             {clock}
           </span>
         </div>
-        {/* Hindi text */}
+        {/* Hindi text - always show in Hindi */}
         <p className="mt-2 text-lg font-semibold text-white">
-          {t(translations.home.welcomeText)}
+          {translations.home.welcomeText.hi}
         </p>
         {/* Results */}
         <div className="mt-6 space-y-8">

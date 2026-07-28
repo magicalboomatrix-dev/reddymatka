@@ -12,7 +12,7 @@ const Header = () => {
   const [usopen, setusOpen] = useState(false);
   const { isLoggedIn, logout } = useAuth();
   
-  const NOTICE_TEXT = t(translations.header.noticeText);
+  const NOTICE_TEXT = translations.header.noticeText.hi;
   const defaultWallet = {
     balance: 0,
     bonus_balance: 0,
@@ -116,7 +116,7 @@ const Header = () => {
         </div>
       <div className="notice-marquee bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] px-3 py-1.5 text-[12px] text-black">
         <span className="notice-marquee-label bg-black px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-[#ffd26a]">
-          {t(translations.header.notice)}
+          {translations.header.notice.hi}
         </span>
         <div className="notice-marquee-body">
           <div className="notice-marquee-track">

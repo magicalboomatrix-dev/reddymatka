@@ -6,12 +6,15 @@ import { getText, getBilingualText } from "./translations";
 const LanguageContext = createContext(undefined);
 
 export function LanguageProvider({ children }) {
-  const [language, setLanguage] = useState("bilingual"); // 'en', 'hi', 'bilingual'
+  const [language, setLanguage] = useState("en"); // 'en', 'hi'
 
   // Load saved language preference from localStorage on mount
   useEffect(() => {
     const savedLang = localStorage.getItem("reddymatka-language");
-    if (savedLang && ["en", "hi", "bilingual"].includes(savedLang)) {
+    if (savedLang === "bilingual") {
+      // Migrate old bilingual setting to English
+      setLanguage("en");
+    } else if (savedLang && ["en", "hi"].includes(savedLang)) {
       setLanguage(savedLang);
     }
   }, []);
@@ -27,7 +30,7 @@ export function LanguageProvider({ children }) {
   }, [language]);
 
   const setLang = useCallback((lang) => {
-    if (["en", "hi", "bilingual"].includes(lang)) {
+    if (["en", "hi"].includes(lang)) {
       setLanguage(lang);
     }
   }, []);

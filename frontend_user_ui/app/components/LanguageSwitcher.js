@@ -8,7 +8,6 @@ export default function LanguageSwitcher() {
   const [isOpen, setIsOpen] = useState(false);
 
   const options = [
-    { value: "bilingual", label: "EN / हिंदी", flag: "🌐" },
     { value: "en", label: "English", flag: "🇬🇧" },
     { value: "hi", label: "हिंदी", flag: "🇮🇳" },
   ];
