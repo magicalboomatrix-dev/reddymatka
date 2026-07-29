@@ -536,9 +536,7 @@ const HomePage = () => {
                         </div>
                         <div className="bg-[#ffe8ef] backdrop-blur-[1px] p-2 text-center text-sm font-black text-[#000000]">
                           {/* Show today's result if visible, else lock */}
-                          {game.result_visible && game.result_number
-                            ? game.result_number
-                            : <LockBadge size="text-sm" />}
+                          {getResultForGame(game.name)}
                         </div>
                         <div
                           className={`flex items-center justify-center px-2 text-center text-[11px] font-black uppercase tracking-widest text-white ${availability.canPlay ? "bg-green-700" : "bg-[#b91c1c]"}`}
