@@ -21,8 +21,8 @@ const monaSans = Mona_Sans({
 });
 
 export const metadata = {
-  title: "reddymatka",
-  description: "reddymatka user application",
+  title: "REDDYMATKA",
+  description: "Welcome to REDDYMATKA - unlock exciting matka games, instant results and real winning opportunities.",
   manifest: "/manifest.json",
 };
 

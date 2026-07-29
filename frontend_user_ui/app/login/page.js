@@ -27,10 +27,10 @@ const LoginPage = () => {
             </section>
             <section>
               <h1 className="text-center text-[22px] font-black text-[#111]">
-                <b>{t(translations.auth.login)} - REDDYMATKA</b>
+                <b>Welcome to REDDYMATKA</b>
               </h1>
               <p className="pb-2.5 text-center text-[#444]">
-                {t(translations.auth.login)} to REDDYMATKA and unlock exciting matka games, instant results and real winning opportunities.
+                Login to REDDYMATKA and unlock exciting matka games, instant results and real winning opportunities.
               </p>
 
               <Link href="/login-account">
