@@ -23,11 +23,10 @@ export default function LanguageSwitcher() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1 rounded bg-[#b88422] px-2 py-1 text-xs font-semibold text-black transition hover:bg-[#d4a035]"
+        className="flex items-center gap-1 bg-[#b88422] px-2.5 py-1.5 text-xs font-semibold text-black transition hover:bg-[#d4a035]"
         aria-label="Change language"
       >
-        <span>{currentOption?.flag}</span>
-        <span className="hidden sm:inline">{currentOption?.label}</span>
+        <span>{currentOption?.label}</span>
         <i
           className={`fa fa-chevron-down text-[10px] transition-transform ${isOpen ? "rotate-180" : ""}`}
         ></i>
@@ -50,7 +49,6 @@ export default function LanguageSwitcher() {
                     : "text-[#333]"
                 }`}
               >
-                <span>{option.flag}</span>
                 <span>{option.label}</span>
                 {language === option.value && (
                   <i className="fa fa-check ml-auto text-[10px] text-[#b88422]"></i>
