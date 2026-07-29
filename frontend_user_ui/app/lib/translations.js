@@ -56,7 +56,7 @@ export const translations = {
     closed: { en: "Closed", hi: "बंद" },
     betOpening: { en: "Bet Opening", hi: "बेट खुलने का समय" },
     betClosing: { en: "Bet Closing", hi: "बेट बंद होने का समय" },
-    kingRecordChart: { en: "KING RECORD CHART", hi: "किंग रिकॉर्ड चार्ट" },
+    kingRecordChart: { en: "SATTA KING RECORD CHART", hi: "सट्टा किंग रिकॉर्ड चार्ट" },
     check: { en: "Check", hi: "चेक करें" },
     noGamesAvailable: { en: "No games available.", hi: "कोई गेम उपलब्ध नहीं।" },
     opensAt: { en: "Opens at", hi: "खुलता है" }

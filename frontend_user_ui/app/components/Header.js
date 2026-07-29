@@ -5,7 +5,7 @@ import { useTranslation } from '../lib/LanguageContext'
 import { translations } from '../lib/translations'
 import { notificationAPI, walletAPI } from '../lib/api'
 import { getSocket } from '../lib/socket'
-import LanguageSwitcher from './LanguageSwitcher'
+
 
 const Header = () => {
   const { t } = useTranslation();
@@ -95,7 +95,6 @@ const Header = () => {
             <Link href="/"><img src="/images/logo.png" alt="Winbuzz" className="h-8 w-auto" /></Link>
           </div>
           <div className="flex items-center gap-2">
-            <LanguageSwitcher />
             <button type="button" className="relative bg-[#b88422] px-2.5 py-1.5" onClick={toggleNotifications} aria-label="Open notifications">
               <i className="fa fa-bell text-[13px] text-black" aria-hidden="true"></i>
               {unreadCount > 0 && (

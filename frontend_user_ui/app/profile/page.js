@@ -1,17 +1,17 @@
 'use client'
 import React, { useState, useEffect } from 'react'
-import { User, BarChart2, CreditCard, ChevronRight, Bell, Shield, FileText, Info, PlayCircle, Gift, Headphones } from 'lucide-react'
+import { User, BarChart2, CreditCard, ChevronRight, Bell, Shield, FileText, Info, PlayCircle, Gift, Headphones, Languages } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { userAPI, notificationAPI } from '../lib/api'
 import { useAuth } from '../lib/AuthContext'
-import { useTranslation } from '../lib/LanguageContext'
+import { useLanguage } from '../lib/LanguageContext'
 import { translations } from '../lib/translations'
 
 const Profile = () => {
   const { user, logout } = useAuth();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language, setLanguage } = useLanguage();
   const [profile, setProfile] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [tickerIndex, setTickerIndex] = useState(0);
@@ -145,6 +145,34 @@ const Profile = () => {
               </div>
               <ChevronRight size={20} className="text-[#b88422]" />
             </Link>
+          </div>
+        </section>
+
+        {/* Settings */}
+        <section>
+          <h3 className="mb-2 px-1 text-xs font-black uppercase tracking-[0.12em] text-[#777]">{t(translations.settings.title)}</h3>
+          <div className="divide-y divide-[#f0ece3]">
+            <div className={menuItemClass}>
+              <div className="flex items-center gap-3 text-sm font-semibold text-[#111]">
+                <div className="flex h-9 w-9 items-center justify-center bg-[#fff4d6]">
+                  <Languages size={20} className="text-[#c8960c]" />
+                </div>
+                <span>{t(translations.settings.language)}</span>
+              </div>
+              <button
+                onClick={() => setLanguage(language === 'en' ? 'hi' : 'en')}
+                className="relative inline-flex h-7 w-16 items-center rounded-full bg-[#e5e7eb] transition-colors duration-300 focus:outline-none"
+                style={{ backgroundColor: language === 'hi' ? '#b88422' : '#e5e7eb' }}
+              >
+                <span className="absolute left-2 text-[10px] font-bold text-white transition-opacity duration-300" style={{ opacity: language === 'hi' ? 1 : 0 }}>HI</span>
+                <span className="absolute right-2 text-[10px] font-bold text-gray-500 transition-opacity duration-300" style={{ opacity: language === 'en' ? 1 : 0 }}>EN</span>
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                    language === 'hi' ? 'translate-x-10' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </section>
 

@@ -55,7 +55,7 @@ const HomeNewLaunch = () => {
     {/* right angled side */}
     <span className="absolute top-0 -right-[6px] h-full w-[clamp(20px,6vw,40px)] bg-[linear-gradient(94deg,#b6842d,#ebda8d_55%,#b7862f)] skew-x-[25deg] sm:-right-[10px]"></span>
 
-    <p className="relative z-10 whitespace-nowrap tracking-wide text-base sm:text-xl font-bold">
+    <p className="relative z-10 whitespace-nowrap tracking-wide text-sm font-medium">
       PLAY NOW
     </p>
 
