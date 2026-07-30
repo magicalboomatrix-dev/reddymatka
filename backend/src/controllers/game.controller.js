@@ -8,6 +8,8 @@ const {
   getResultDate,
   isResultVisible,
   canSettleGame,
+  resolveGameWindow,
+  formatDate,
 } = require('../utils/game-time');
 
 exports.listGames = async (req, res, next) => {
@@ -57,6 +59,7 @@ exports.listGames = async (req, res, next) => {
     const gameDateMap = games.map((g) => ({
       id: g.id,
       currentSessionDate: getResultDate(g, now),
+      displaySessionDate: formatDate(resolveGameWindow(g, now).closeDatetime),
     }));
 
     // Single batch query for current session results
@@ -74,7 +77,7 @@ exports.listGames = async (req, res, next) => {
       batchResults = rows;
     }
 
-    // Also fetch the most recent declared result per game strictly BEFORE current session date (Yesterday)
+    // Also fetch the most recent declared result per game strictly BEFORE display session date (Yesterday)
     let recentResults = [];
     if (games.length > 0) {
       const queries = gameDateMap.map(d => 
@@ -84,7 +87,7 @@ exports.listGames = async (req, res, next) => {
            FROM game_results
            WHERE game_id = ? AND result_date < ? AND declared_at IS NOT NULL
            ORDER BY result_date DESC LIMIT 1`,
-          [d.id, d.currentSessionDate]
+          [d.id, d.displaySessionDate]
         )
       );
       const results = await Promise.all(queries);
