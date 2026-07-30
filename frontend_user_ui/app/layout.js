@@ -48,7 +48,7 @@ export default async function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="reddymatka" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="apple-touch-icon" href="/icons/reddymatka_icon_192.png" />
+        <link rel="apple-touch-icon" href="/icons/REDDYMATKA_icon_192.png" />
       </head>
 
       <body
