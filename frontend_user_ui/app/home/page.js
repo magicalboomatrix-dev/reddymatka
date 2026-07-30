@@ -336,12 +336,18 @@ const HomePage = () => {
 
   // Memoized helpers
   const getResultForGame = useCallback(
-    (gameName) => {
-      const result = liveResults.find((item) => item.name === gameName);
-      if (!result || !result.result_visible || !result.result_number) {
-        return <LockBadge size="text-sm" />;
+    (game) => {
+      // First check if the backend API already provided the Today result
+      if (game.is_today_result_visible && game.today_result_number) {
+        return game.today_result_number;
       }
-      return result.result_number;
+      
+      // Fallback to liveResults for real-time updates
+      const result = liveResults.find((item) => item.name === game.name);
+      if (result && result.result_visible && result.result_number) {
+        return result.result_number;
+      }
+      return <LockBadge size="text-sm" />;
     },
     [liveResults],
   );
@@ -536,7 +542,7 @@ const HomePage = () => {
                         </div>
                         <div className="bg-[#ffe8ef] backdrop-blur-[1px] p-2 text-center text-sm font-black text-[#000000]">
                           {/* Show today's result if visible, else lock */}
-                          {getResultForGame(game.name)}
+                          {getResultForGame(game)}
                         </div>
                         <div
                           className={`flex items-center justify-center px-2 text-center text-[11px] font-black uppercase tracking-widest text-white ${availability.canPlay ? "bg-green-700" : "bg-[#b91c1c]"}`}
