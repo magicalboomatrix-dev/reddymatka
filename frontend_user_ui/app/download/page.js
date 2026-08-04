@@ -79,7 +79,7 @@ export default function PlayStoreDownload() {
       {/* ── App header ──────────────────────────────────────────── */}
       <section className="flex gap-4 px-5 pt-6 pb-4">
         <img
-          src="/icons/download_page_logo.png"
+          src="/images/download_page_logo.png"
           alt="REDDYMATKA"
           className="h-[72px] w-[72px] rounded-2xl shadow-md"
         />
@@ -143,7 +143,7 @@ export default function PlayStoreDownload() {
                 key={i}
                 src={src}
                 alt={`Screenshot ${i + 1}`}
-                className="h-[200px] w-auto rounded-xl border border-[#dadce0] object-contain"
+                className="w-full h-auto rounded-xl"
               />
             ))}
           </div>
