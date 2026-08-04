@@ -143,7 +143,7 @@ export default function PlayStoreDownload() {
                 key={i}
                 src={src}
                 alt={`Screenshot ${i + 1}`}
-                className="h-[200px] w-auto rounded-xl border border-[#dadce0] object-cover"
+                className="h-[200px] w-auto rounded-xl border border-[#dadce0] object-contain"
               />
             ))}
           </div>
