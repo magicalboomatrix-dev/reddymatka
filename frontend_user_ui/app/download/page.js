@@ -79,13 +79,13 @@ export default function PlayStoreDownload() {
       {/* ── App header ──────────────────────────────────────────── */}
       <section className="flex gap-4 px-5 pt-6 pb-4">
         <img
-          src="/icons/reddymatka_icon_128.png"
-          alt="reddymatka "
+          src="/icons/REDDYMATKA_icon_128.png"
+          alt="REDDYMATKA"
           className="h-[72px] w-[72px] rounded-2xl shadow-md"
         />
         <div className="flex flex-col justify-center">
-          <h1 className="text-[22px] font-medium leading-tight">reddymatka </h1>
-          <p className="mt-0.5 text-sm font-medium text-[#01875f]">reddymatka Official</p>
+          <h1 className="text-[22px] font-medium leading-tight">REDDYMATKA</h1>
+          <p className="mt-0.5 text-sm font-medium text-[#01875f]">Play The Market Win The Game</p>
           <p className="mt-0.5 text-xs text-[#5f6368]">Contains ads&nbsp;&middot;&nbsp;In-app purchases</p>
         </div>
       </section>

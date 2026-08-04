@@ -30,5 +30,6 @@ router.get('/referrals', authenticate, authorize('admin'), adminController.listR
 router.get('/financial-report', authenticate, authorize('admin'), adminController.getFinancialReport);
 router.get('/system-alerts', authenticate, authorize('admin'), adminController.getSystemAlerts);
 router.put('/system-alerts/:id/resolve', authenticate, authorize('admin'), adminActivity('resolve_system_alert', 'system_alerts'), adminController.resolveSystemAlert);
+router.delete('/users/:id', authenticate, authorize('admin'), adminActivity('delete_user', 'user'), adminController.deleteUser);
 
 module.exports = router;

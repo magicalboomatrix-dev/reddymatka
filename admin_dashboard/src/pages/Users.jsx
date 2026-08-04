@@ -42,7 +42,7 @@ function TableRowSkeleton() {
 }
 
 // Mobile User Card Component
-function UserCard({ u, isAdmin, selectedModerators, setSelectedModerators, assignModerator, toggleBlock, assigningUserId, moderators }) {
+function UserCard({ u, isAdmin, selectedModerators, setSelectedModerators, assignModerator, toggleBlock, deleteUser, assigningUserId, moderators }) {
   return (
     <div className="bg-white border rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
       {/* Header */}
@@ -121,6 +121,12 @@ function UserCard({ u, isAdmin, selectedModerators, setSelectedModerators, assig
               }`}
             >
               {u.is_blocked ? 'Unblock' : 'Block'}
+            </button>
+            <button
+              onClick={() => deleteUser(u.id)}
+              className="px-3 py-2 text-sm font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            >
+              Delete
             </button>
           </div>
         </div>
@@ -202,6 +208,17 @@ export default function Users() {
       loadUsers();
     } catch (err) {
       toastError(err.response?.data?.error || 'Failed');
+    }
+  };
+
+  const deleteUser = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
+    try {
+      await api.delete(`/admin/users/${id}`);
+      success('User deleted successfully');
+      loadUsers();
+    } catch (err) {
+      toastError(err.response?.data?.error || 'Failed to delete user');
     }
   };
 
@@ -334,6 +351,7 @@ export default function Users() {
               setSelectedModerators={setSelectedModerators}
               assignModerator={assignModerator}
               toggleBlock={toggleBlock}
+              deleteUser={deleteUser}
               assigningUserId={assigningUserId}
               moderators={moderators}
             />
@@ -430,6 +448,12 @@ export default function Users() {
                               }`}
                             >
                               {u.is_blocked ? 'Unblock' : 'Block'}
+                            </button>
+                            <button
+                              onClick={() => deleteUser(u.id)}
+                              className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                            >
+                              Delete
                             </button>
                           </>
                         )}

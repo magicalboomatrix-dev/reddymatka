@@ -1626,3 +1626,24 @@ exports.resolveSystemAlert = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.deleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    
+    const [result] = await pool.query(
+      "UPDATE users SET is_deleted = 1, is_blocked = 1 WHERE id = ? AND role = 'user'",
+      [id]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'User not found or already deleted.' });
+    }
+
+    await invalidateUserCache(id);
+
+    res.json({ message: 'User deleted successfully.' });
+  } catch (error) {
+    next(error);
+  }
+};

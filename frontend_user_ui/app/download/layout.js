@@ -1,30 +1,30 @@
 export const metadata = {
-  title: 'REDDYMATKA  - Download App',
-  description: 'Download REDDYMATKA  - The most trusted platform for  Matka results, live updates, and charts.',
+  title: 'Welcome to REDDYMATKA → PLAY THE MARKET • WIN THE GAME',
+  description: 'Ready to win? Play the market and win the game with REDDYMATKA. Stay ahead of the competition with accurate Satta King results, live charts, and daily winning numbers.',
   openGraph: {
-    title: 'REDDYMATKA ',
-    description: 'Download REDDYMATKA  app. The most trusted platform for  Matka results, live updates, and charts.',
+    title: 'Welcome to REDDYMATKA → PLAY THE MARKET • WIN THE GAME',
+    description: 'Ready to win? Play the market and win the game with REDDYMATKA. Stay ahead of the competition with accurate Satta King results, live charts, and daily winning numbers.',
     images: [
       {
-        url: 'https://reddymatka.com/icons/reddymatka_icon_512.png',
+        url: 'https://reddymatka.com/icons/REDDYMATKA_icon_512.png',
         width: 512,
         height: 512,
-        alt: 'REDDYMATKA  App',
+        alt: 'REDDYMATKA App',
         type: 'image/png',
       },
     ],
     type: 'website',
-    siteName: 'REDDYMATKA ',
+    siteName: 'REDDYMATKA',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'REDDYMATKA  - Download App',
-    description: 'Download reddymatka  app. The most trusted platform for  Matka results.',
-    images: ['https://reddymatka.com/icons/reddymatka_icon_512.png'],
+    title: 'Welcome to REDDYMATKA → PLAY THE MARKET • WIN THE GAME',
+    description: 'Ready to win? Play the market and win the game with REDDYMATKA. Stay ahead of the competition with accurate Satta King results, live charts, and daily winning numbers.',
+    images: ['https://reddymatka.com/icons/REDDYMATKA_icon_512.png'],
   },
   icons: {
-    icon: '/icons/reddymatka_icon_192.png',
-    apple: '/icons/reddymatka_icon_192.png',
+    icon: '/icons/REDDYMATKA_icon_192.png',
+    apple: '/icons/REDDYMATKA_icon_192.png',
   },
 };
 
