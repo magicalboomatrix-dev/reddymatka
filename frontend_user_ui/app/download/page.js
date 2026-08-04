@@ -79,13 +79,13 @@ export default function PlayStoreDownload() {
       {/* ── App header ──────────────────────────────────────────── */}
       <section className="flex gap-4 px-5 pt-6 pb-4">
         <img
-          src="/icons/REDDYMATKA_icon_128.png"
+          src="/icons/download_page_logo.png"
           alt="REDDYMATKA"
           className="h-[72px] w-[72px] rounded-2xl shadow-md"
         />
         <div className="flex flex-col justify-center">
           <h1 className="text-[22px] font-medium leading-tight">REDDYMATKA</h1>
-          <p className="mt-0.5 text-sm font-medium text-[#01875f]">Play The Market Win The Game</p>
+          <p className="mt-0.5 text-sm font-medium text-[#01875f]">PLAY THE MARKET • WIN THE GAME</p>
           <p className="mt-0.5 text-xs text-[#5f6368]">Contains ads&nbsp;&middot;&nbsp;In-app purchases</p>
         </div>
       </section>
@@ -157,7 +157,7 @@ export default function PlayStoreDownload() {
           <ChevronRight size={20} className="text-[#5f6368]" />
         </div>
         <p className="mt-2 text-sm leading-relaxed text-[#5f6368]">
-          reddymatka  is the most trusted and fastest platform for  Matka results, live updates, and charts. Get instant notifications, play responsibly, and track your game history — everything in one place.
+          ReddyMatka  is the most trusted and fastest platform for  Matka results, live updates, and charts. Get instant notifications, play responsibly, and track your game history — everything in one place.
         </p>
         <div className="mt-3 flex flex-wrap gap-2">
           {['Entertainment', 'Games', 'Results'].map((tag) => (
