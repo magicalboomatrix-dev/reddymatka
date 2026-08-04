@@ -150,7 +150,7 @@ exports.listUsers = async (req, res, next) => {
       FROM users u
       LEFT JOIN wallets w ON u.id = w.user_id
       LEFT JOIN users m ON u.moderator_id = m.id
-      WHERE 1=1
+      WHERE u.is_deleted = 0
     `;
     const params = [];
 
