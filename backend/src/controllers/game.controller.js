@@ -88,8 +88,8 @@ exports.listGames = async (req, res, next) => {
           `SELECT game_id, result_number, DATE_FORMAT(result_date, '%Y-%m-%d') AS result_date,
                   declared_at, is_settled
            FROM game_results
-           WHERE game_id = ? AND result_date < ? AND declared_at IS NOT NULL
-           ORDER BY result_date DESC LIMIT 1`,
+           WHERE game_id = ? AND result_date = DATE_SUB(?, INTERVAL 1 DAY) AND declared_at IS NOT NULL
+           LIMIT 1`,
           [d.id, d.displaySessionDate]
         )
       );
