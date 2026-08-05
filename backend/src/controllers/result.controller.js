@@ -616,6 +616,7 @@ exports.updateResultById = async (req, res, next) => {
     }
 
     redis.delPattern('cache:/api/results*').catch(() => {});
+    redis.delPattern('cache:/api/games*').catch(() => {});
 
     const message = (force && reversedCount > 0)
       ? `Result force-updated. ${reversedCount} bet(s) reversed and re-queued for settlement.`
@@ -655,6 +656,7 @@ exports.deleteResultById = async (req, res, next) => {
 
     await pool.query('DELETE FROM game_results WHERE id = ?', [resultId]);
     redis.delPattern('cache:/api/results*').catch(() => {});
+    redis.delPattern('cache:/api/games*').catch(() => {});
     res.json({ message: 'Result deleted successfully.', resultId });
   } catch (error) {
     next(error);
@@ -696,6 +698,7 @@ exports.bulkDeleteResults = async (req, res, next) => {
 
     if (deletableIds.length > 0) {
       redis.delPattern('cache:/api/results*').catch(() => {});
+      redis.delPattern('cache:/api/games*').catch(() => {});
     }
 
     res.json({
@@ -813,6 +816,8 @@ exports.importYearlyResults = async (req, res, next) => {
     }
 
     await conn.commit();
+    redis.delPattern('cache:/api/results*').catch(() => {});
+    redis.delPattern('cache:/api/games*').catch(() => {});
     res.json({
       message: 'Yearly result import completed.',
       processed,

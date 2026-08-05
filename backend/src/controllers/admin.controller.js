@@ -150,7 +150,7 @@ exports.listUsers = async (req, res, next) => {
       FROM users u
       LEFT JOIN wallets w ON u.id = w.user_id
       LEFT JOIN users m ON u.moderator_id = m.id
-      WHERE u.is_deleted = 0
+      WHERE 1=1
     `;
     const params = [];
 
@@ -1628,22 +1628,36 @@ exports.resolveSystemAlert = async (req, res, next) => {
 };
 
 exports.deleteUser = async (req, res, next) => {
+  const connection = await pool.getConnection();
   try {
     const { id } = req.params;
+    await connection.beginTransaction();
     
-    const [result] = await pool.query(
-      "UPDATE users SET is_deleted = 1, is_blocked = 1 WHERE id = ? AND role = 'user'",
+    // Manually delete records from tables that lack ON DELETE CASCADE
+    await connection.query("DELETE FROM daily_bonus_claims WHERE user_id = ?", [id]);
+    await connection.query("DELETE FROM fraud_alerts WHERE user_id = ?", [id]);
+    await connection.query("DELETE FROM support_messages WHERE sender_id = ?", [id]);
+    await connection.query("DELETE FROM support_tickets WHERE user_id = ?", [id]);
+
+    // Perform a complete hard delete instead of soft delete/block
+    const [result] = await connection.query(
+      "DELETE FROM users WHERE id = ? AND role = 'user'",
       [id]
     );
 
+    await connection.commit();
+
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'User not found or already deleted.' });
+      return res.status(404).json({ error: 'User not found.' });
     }
 
     await invalidateUserCache(id);
 
     res.json({ message: 'User deleted successfully.' });
   } catch (error) {
+    await connection.rollback();
     next(error);
+  } finally {
+    connection.release();
   }
 };

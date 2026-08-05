@@ -22,6 +22,7 @@ async function init() {
       maxRetriesPerRequest: 1,
       enableOfflineQueue: false,
       connectTimeout: 5000,
+      keyPrefix: 'reddymatka:', // Ensures keys from this app don't collide with other apps
     });
 
     client.on('ready', () => {
@@ -80,12 +81,16 @@ async function del(key) {
 async function delPattern(pattern) {
   if (!isReady) return;
   try {
+    const prefix = client.options.keyPrefix || '';
+    const matchPattern = prefix + pattern;
     let cursor = '0';
     do {
-      const [nextCursor, keys] = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      const [nextCursor, keys] = await client.scan(cursor, 'MATCH', matchPattern, 'COUNT', 100);
       cursor = nextCursor;
       if (keys.length > 0) {
-        await client.del(...keys);
+        // Remove prefix from keys since client.del() will automatically prepend it again
+        const keysWithoutPrefix = prefix ? keys.map(k => k.slice(prefix.length)) : keys;
+        await client.del(...keysWithoutPrefix);
       }
     } while (cursor !== '0');
   } catch {
