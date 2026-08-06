@@ -78,13 +78,13 @@ export default function Layout() {
         }`}
       >
         {/* Logo Section */}
-        <div className="p-4 sm:p-6 border-b border-dark-700 flex items-center justify-between">
-          <div>
-            <img src="/logo.png" alt="REDDYMATKA Admin Panel" className="h-12 w-auto" />
+        <div className="p-4 sm:p-5 border-b border-dark-700 flex items-center justify-between relative">
+          <div className="flex-1 flex justify-center">
+            <img src="/logo.png" alt="REDDYMATKA Admin Panel" className="h-20 w-auto max-w-full object-contain rounded-md" />
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden p-1 text-dark-400 hover:text-white"
+            className="lg:hidden p-1 text-dark-400 hover:text-white absolute right-3 top-3"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

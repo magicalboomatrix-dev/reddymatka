@@ -3,6 +3,6 @@
       "target": {
         "namespace": "android_app",
         "package_name": "com.reddymatka.twa",
-        "sha256_cert_fingerprints": ["19:FF:B0:79:F5:AA:8F:C7:03:EA:D4:90:5D:8E:E4:33:08:57:FE:C3:D7:E4:A9:2A:58:ED:C8:E4:7D:06:A8:A8"]
+        "sha256_cert_fingerprints": ["09:15:C6:5C:0E:9D:F5:9F:25:1B:F9:8E:EE:A2:A9:75:7A:70:F8:79:30:81:47:CD:E5:B1:6F:AB:8B:D5:27:32"]
       }
     }]
