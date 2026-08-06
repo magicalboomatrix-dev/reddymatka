@@ -80,8 +80,7 @@ export default function Layout() {
         {/* Logo Section */}
         <div className="p-4 sm:p-6 border-b border-dark-700 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-primary-400">REDDYMATKA</h1>
-            <p className="text-xs sm:text-sm text-dark-400 mt-0.5">Admin Panel</p>
+            <img src="/logo.png" alt="REDDYMATKA Admin Panel" className="h-12 w-auto" />
           </div>
           <button 
             onClick={() => setSidebarOpen(false)}
