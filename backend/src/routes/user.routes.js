@@ -12,5 +12,6 @@ router.put('/bank-accounts/:id/default', authenticate, userController.setDefault
 router.get('/account-statement', authenticate, userController.getAccountStatement);
 router.get('/profit-loss', authenticate, userController.getProfitLoss);
 router.get('/ui-config', authenticate, userController.getUiConfig);
+router.post('/confirm-age-consent', authenticate, userController.confirmAgeConsent);
 
 module.exports = router;

@@ -95,6 +95,7 @@ export const userAPI = {
   getAccountStatement: (params) => request(`/users/account-statement${buildQuery(params)}`),
   getProfitLoss: (params) => request(`/users/profit-loss${buildQuery(params)}`),
   getUiConfig: () => request('/users/ui-config'),
+  confirmAgeConsent: (is_18_plus = true) => request('/users/confirm-age-consent', { method: 'POST', body: JSON.stringify({ is_18_plus }) }),
 };
 
 export const bankAccountAPI = {

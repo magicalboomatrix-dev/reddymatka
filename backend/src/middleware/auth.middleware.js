@@ -44,7 +44,7 @@ const authenticate = async (req, res, next) => {
 
     // ── DB cold path ─────────────────────────────────────────────────────────
     const [users] = await pool.query(
-      'SELECT id, name, phone, role, moderator_id, referral_code, is_blocked, is_deleted, created_at FROM users WHERE id = ?',
+      'SELECT id, name, phone, role, moderator_id, referral_code, is_blocked, is_deleted, is_18_plus, created_at FROM users WHERE id = ?',
       [decoded.id]
     );
     if (users.length === 0) {

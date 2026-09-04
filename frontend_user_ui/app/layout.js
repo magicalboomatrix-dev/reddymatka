@@ -2,6 +2,7 @@ import { headers } from 'next/headers';
 import Footer from "./components/Footer";
 import AuthGate from "./components/AuthGate";
 import PWAHandler from "./components/PWAHandler";
+import AgeConsentModal from "./components/AgeConsentModal";
 import { AuthProvider } from "./lib/AuthContext";
 import { LanguageProvider } from "./lib/LanguageContext";
 import "./globals.css";
@@ -58,6 +59,7 @@ export default async function RootLayout({ children }) {
         <LanguageProvider>
           <AuthProvider>
             <PWAHandler />
+            <AgeConsentModal />
             <div className="relative flex w-full max-w-[430px] flex-col overflow-x-hidden overflow-y-auto bg-white">
               <AuthGate>
                 {children}

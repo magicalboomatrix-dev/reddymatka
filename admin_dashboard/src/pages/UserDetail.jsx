@@ -77,6 +77,8 @@ export default function UserDetail() {
     switch (action) {
       case 'register':
         return <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded">Register (18+ Consent)</span>;
+      case 'consent_18_plus':
+        return <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs font-bold rounded">18+ Consent Confirmed</span>;
       case 'login_mpin':
         return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">MPIN Login</span>;
       case 'request_withdraw':

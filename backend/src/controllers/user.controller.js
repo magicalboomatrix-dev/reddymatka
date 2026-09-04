@@ -1,9 +1,11 @@
 const pool = require('../config/database');
 const { clampPagination } = require('../utils/pagination');
+const { recordUserActivity } = require('../utils/user-activity');
+const { invalidateUserCache } = require('../middleware/auth.middleware');
 
 exports.getProfile = async (req, res, next) => {
   try {
-    const [users] = await pool.query('SELECT default_bank_account_id FROM users WHERE id = ? LIMIT 1', [req.user.id]);
+    const [users] = await pool.query('SELECT default_bank_account_id, is_18_plus FROM users WHERE id = ? LIMIT 1', [req.user.id]);
     const [wallets] = await pool.query('SELECT balance, bonus_balance FROM wallets WHERE user_id = ?', [req.user.id]);
     const wallet = wallets[0] || { balance: 0, bonus_balance: 0 };
 
@@ -31,6 +33,7 @@ exports.getProfile = async (req, res, next) => {
         role: req.user.role,
         referral_code: req.user.referral_code,
         default_bank_account_id: users[0]?.default_bank_account_id || null,
+        is_18_plus: !!(users[0]?.is_18_plus ?? req.user?.is_18_plus),
         created_at: req.user.created_at,
       },
       wallet: {
@@ -396,6 +399,36 @@ exports.getUiConfig = async (req, res, next) => {
           : '',
       ].filter(Boolean),
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Confirm 18+ age consent for existing registered users
+exports.confirmAgeConsent = async (req, res, next) => {
+  try {
+    const { is_18_plus } = req.body;
+    if (is_18_plus !== true && is_18_plus !== 1 && is_18_plus !== '1') {
+      return res.status(400).json({ error: 'You must confirm that you are 18 years of age or older.' });
+    }
+
+    await pool.query('UPDATE users SET is_18_plus = 1 WHERE id = ?', [req.user.id]);
+    await invalidateUserCache(req.user.id);
+
+    await recordUserActivity({
+      userId: req.user.id,
+      action: 'consent_18_plus',
+      entityType: 'user',
+      entityId: req.user.id,
+      details: {
+        is_18_plus: 1,
+        educational_disclaimer_accepted: true,
+        method: 'existing_user_modal',
+      },
+      req,
+    });
+
+    res.json({ message: 'Age consent recorded successfully.', is_18_plus: true });
   } catch (error) {
     next(error);
   }

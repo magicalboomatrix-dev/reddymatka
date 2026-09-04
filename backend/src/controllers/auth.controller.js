@@ -393,7 +393,7 @@ exports.loginMpin = async (req, res, next) => {
     }
 
     const [users] = await pool.query(
-      'SELECT id, name, phone, role, mpin_hash, mpin_enabled, mpin_attempts, mpin_blocked_until, is_blocked FROM users WHERE phone IN (?) AND role = ? LIMIT 1',
+      'SELECT id, name, phone, role, mpin_hash, mpin_enabled, mpin_attempts, mpin_blocked_until, is_blocked, is_18_plus FROM users WHERE phone IN (?) AND role = ? LIMIT 1',
       [phoneCandidates, 'user']
     );
 
@@ -466,7 +466,7 @@ exports.loginMpin = async (req, res, next) => {
     res.json({
       message: 'Login successful.',
       token,
-      user: { id: user.id, name: user.name, phone: user.phone, role: user.role }
+      user: { id: user.id, name: user.name, phone: user.phone, role: user.role, is_18_plus: !!user.is_18_plus }
     });
   } catch (error) {
     next(error);
@@ -544,6 +544,6 @@ exports.logout = (req, res) => {
 
 // Return the currently authenticated user (used by admin dashboard to verify session)
 exports.getMe = (req, res) => {
-  const { id, name, phone, role, moderator_id, referral_code } = req.user;
-  res.json({ user: { id, name, phone, role, moderator_id, referral_code } });
+  const { id, name, phone, role, moderator_id, referral_code, is_18_plus } = req.user;
+  res.json({ user: { id, name, phone, role, moderator_id, referral_code, is_18_plus: !!is_18_plus } });
 };
