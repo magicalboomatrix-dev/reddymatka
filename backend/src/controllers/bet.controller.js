@@ -3,6 +3,7 @@ const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const { canPlaceBet, getResultDate } = require('../utils/game-time');
 const { clampPagination, escapeLike } = require('../utils/pagination');
 const fraudService = require('../services/fraud.service');
+const { recordUserActivity } = require('../utils/user-activity');
 
 // Generate crossing combinations: digits A,B → "AB" and "BA" (if different)
 function generateCrossingNumbers(digit1, digit2) {
@@ -193,6 +194,20 @@ exports.placeBet = async (req, res, next) => {
     });
 
     await conn.commit();
+
+    recordUserActivity({
+      userId: req.user.id,
+      action: 'place_bet',
+      entityType: 'bet',
+      entityId: betId,
+      details: {
+        game_id,
+        type,
+        total_amount: totalAmount,
+        numbers_count: betNumbers.length,
+      },
+      req,
+    });
 
     // Fire-and-forget fraud check — runs outside transaction, never blocks response
     fraudService.runChecks(req.user.id, totalAmount).catch(() => {});

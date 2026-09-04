@@ -1,11 +1,73 @@
 const pool = require('../config/database');
+const bcrypt = require('bcryptjs');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const { clampPagination } = require('../utils/pagination');
+const { sendOtpSms } = require('../utils/sms');
+const { getPhoneCandidates, toE164Phone } = require('../utils/phone');
+const { recordUserActivity } = require('../utils/user-activity');
+
+// Send OTP for withdrawal verification
+exports.sendWithdrawOtp = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const phone = req.user.phone;
+    const phoneCandidates = getPhoneCandidates(phone);
+    const e164Phone = toE164Phone(phone);
+
+    if (!phone || phoneCandidates.length === 0) {
+      return res.status(400).json({ error: 'Valid registered phone number is required.' });
+    }
+
+    // Invalidate previous unexpired withdrawal OTPs
+    await pool.query(
+      "UPDATE otps SET is_used = 1 WHERE phone IN (?) AND purpose = 'withdraw' AND is_used = 0",
+      [phoneCandidates]
+    );
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpHash = await bcrypt.hash(otp, 8);
+    const otpExpiryMinutes = parseInt(process.env.OTP_EXPIRY_MINUTES) || 5;
+    const expiresAt = new Date(Date.now() + otpExpiryMinutes * 60 * 1000);
+
+    const [insertResult] = await pool.query(
+      'INSERT INTO otps (phone, purpose, otp, expires_at) VALUES (?, ?, ?, ?)',
+      [phone, 'withdraw', otpHash, expiresAt]
+    );
+
+    try {
+      await sendOtpSms({
+        phone: e164Phone || phone,
+        otp,
+        purpose: 'withdraw',
+        expiryMinutes: otpExpiryMinutes,
+      });
+    } catch (smsError) {
+      await pool.query('UPDATE otps SET is_used = 1 WHERE id = ?', [insertResult.insertId]);
+      throw smsError;
+    }
+
+    await recordUserActivity({
+      userId,
+      action: 'request_withdraw_otp',
+      entityType: 'user',
+      entityId: userId,
+      details: { phone },
+      req,
+    });
+
+    res.json({
+      message: 'Withdrawal OTP sent successfully.',
+      ...(process.env.NODE_ENV !== 'production' && { otp }),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 exports.requestWithdraw = async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
-    const { bank_id, bank_account_id, amount, withdraw_method, upi_id, phone_number } = req.body;
+    const { bank_id, bank_account_id, amount, withdraw_method, upi_id, phone_number, otp } = req.body;
     let { scanner_image } = req.body;
     if (req.file) {
       scanner_image = `/uploads/scanners/${req.file.filename}`;
@@ -14,6 +76,11 @@ exports.requestWithdraw = async (req, res, next) => {
 
     if (!['bank', 'upi', 'phone', 'scanner'].includes(method)) {
       return res.status(400).json({ error: 'Invalid withdrawal method.' });
+    }
+
+    // Require and verify OTP
+    if (!otp || !/^\d{6}$/.test(String(otp).trim())) {
+      return res.status(400).json({ error: 'Valid 6-digit withdrawal OTP is required.' });
     }
 
     let resolvedBankId = null;
@@ -108,6 +175,27 @@ exports.requestWithdraw = async (req, res, next) => {
 
     await conn.beginTransaction();
 
+    // Verify OTP in DB
+    const phoneCandidates = getPhoneCandidates(req.user.phone);
+    const [otpRecords] = await conn.query(
+      `SELECT * FROM otps WHERE phone IN (?) AND purpose = 'withdraw' AND is_used = 0 AND expires_at > UTC_TIMESTAMP() ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      [phoneCandidates.length > 0 ? phoneCandidates : [req.user.phone]]
+    );
+
+    if (otpRecords.length === 0) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Invalid or expired withdrawal OTP. Please request a new OTP.' });
+    }
+
+    const isValidOtp = await bcrypt.compare(String(otp).trim(), otpRecords[0].otp);
+    if (!isValidOtp) {
+      await conn.rollback();
+      return res.status(400).json({ error: 'Invalid or expired withdrawal OTP.' });
+    }
+
+    // Mark OTP as used
+    await conn.query('UPDATE otps SET is_used = 1 WHERE id = ?', [otpRecords[0].id]);
+
     if (method === 'bank') {
       // Verify bank account belongs to user
       const [banks] = await conn.query(
@@ -136,10 +224,10 @@ exports.requestWithdraw = async (req, res, next) => {
       });
     }
 
-    // Create withdraw request
+    // Create withdraw request with otp_verified = 1 and status = 'pending'
     const [result] = await conn.query(
-      'INSERT INTO withdraw_requests (user_id, bank_id, withdraw_method, upi_id, phone_number, scanner_image, amount) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, resolvedBankId || null, method, cleanedUpi, cleanedPhone, cleanedScannerImage, parsedAmount]
+      'INSERT INTO withdraw_requests (user_id, bank_id, withdraw_method, upi_id, phone_number, scanner_image, amount, otp_verified, status) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)',
+      [req.user.id, resolvedBankId || null, method, cleanedUpi, cleanedPhone, cleanedScannerImage, parsedAmount, 'pending']
     );
 
     await recordWalletTransaction(conn, {
@@ -154,8 +242,24 @@ exports.requestWithdraw = async (req, res, next) => {
 
     await conn.commit();
 
+    await recordUserActivity({
+      userId: req.user.id,
+      action: 'request_withdraw',
+      entityType: 'withdraw_request',
+      entityId: result.insertId,
+      details: {
+        amount: parsedAmount,
+        withdraw_method: method,
+        bank_id: resolvedBankId || null,
+        upi_id: cleanedUpi,
+        phone_number: cleanedPhone,
+        otp_verified: true,
+      },
+      req,
+    });
+
     res.status(201).json({
-      message: 'Withdrawal request submitted.',
+      message: 'Withdrawal request submitted successfully.',
       withdraw: { id: result.insertId, amount: parsedAmount, status: 'pending' }
     });
   } catch (error) {
@@ -198,10 +302,12 @@ exports.getWithdrawHistory = async (req, res, next) => {
   }
 };
 
-exports.approveWithdraw = async (req, res, next) => {
+// Maker-Checker Step 1: Checker verifies details and moves from 'pending' -> 'checked'
+exports.checkWithdraw = async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
     const { id } = req.params;
+    const { notes } = req.body;
 
     await conn.beginTransaction();
 
@@ -222,7 +328,73 @@ exports.approveWithdraw = async (req, res, next) => {
     const [requests] = await conn.query(requestQuery, requestParams);
     if (requests.length === 0) {
       await conn.rollback();
-      return res.status(404).json({ error: 'Withdrawal request not found or already processed.' });
+      return res.status(404).json({ error: 'Withdrawal request not found or not in pending status.' });
+    }
+
+    await conn.query(
+      'UPDATE withdraw_requests SET status = ?, checked_by = ?, checked_at = NOW(), checker_notes = ? WHERE id = ?',
+      ['checked', req.user.id, notes ? String(notes).trim().slice(0, 255) : null, id]
+    );
+
+    await conn.commit();
+    res.json({
+      message: 'Withdrawal verified by checker and forwarded for payout approval.',
+      status: 'checked',
+    });
+  } catch (error) {
+    await conn.rollback();
+    next(error);
+  } finally {
+    conn.release();
+  }
+};
+
+// Maker-Checker Step 2: Final approval.
+// DIRECT PAYOUT IS DISABLED: Requests in 'pending' status cannot be directly approved without checker verification!
+exports.approveWithdraw = async (req, res, next) => {
+  const conn = await pool.getConnection();
+  try {
+    const { id } = req.params;
+
+    await conn.beginTransaction();
+
+    // Check status first
+    let statusQuery = 'SELECT wr.* FROM withdraw_requests wr WHERE wr.id = ? FOR UPDATE';
+    const statusParams = [id];
+
+    if (req.user.role === 'moderator') {
+      statusQuery = `
+        SELECT wr.*
+        FROM withdraw_requests wr
+        JOIN users u ON wr.user_id = u.id
+        WHERE wr.id = ? AND u.moderator_id = ?
+        FOR UPDATE
+      `;
+      statusParams.push(req.user.id);
+    }
+
+    const [requests] = await conn.query(statusQuery, statusParams);
+    if (requests.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ error: 'Withdrawal request not found.' });
+    }
+
+    const request = requests[0];
+
+    // Enforce Maker-Checker: "Direct payout NO; need a checker"
+    if (request.status === 'pending') {
+      await conn.rollback();
+      return res.status(400).json({
+        error: 'Direct payout is disabled. This withdrawal must be verified by a checker before payout approval.',
+        code: 'CHECKER_REQUIRED',
+      });
+    }
+
+    if (request.status !== 'checked') {
+      await conn.rollback();
+      return res.status(400).json({
+        error: `Cannot approve withdrawal with status "${request.status}". Must be in "checked" status.`,
+      });
     }
 
     await conn.query('UPDATE withdraw_requests SET status = ?, approved_by = ? WHERE id = ?',
@@ -230,10 +402,10 @@ exports.approveWithdraw = async (req, res, next) => {
 
     // Notification
     await conn.query('INSERT INTO notifications (user_id, type, message) VALUES (?, ?, ?)',
-      [requests[0].user_id, 'withdraw', `Your withdrawal of ₹${requests[0].amount} has been approved.`]);
+      [request.user_id, 'withdraw', `Your withdrawal of ₹${request.amount} has been approved.`]);
 
     await conn.commit();
-    res.json({ message: 'Withdrawal approved.' });
+    res.json({ message: 'Withdrawal payout approved successfully.' });
   } catch (error) {
     await conn.rollback();
     next(error);
@@ -250,15 +422,15 @@ exports.rejectWithdraw = async (req, res, next) => {
 
     await conn.beginTransaction();
 
-    let requestQuery = 'SELECT wr.* FROM withdraw_requests wr WHERE wr.id = ? AND wr.status = ? FOR UPDATE';
-    const requestParams = [id, 'pending'];
+    let requestQuery = 'SELECT wr.* FROM withdraw_requests wr WHERE wr.id = ? AND wr.status IN (?, ?) FOR UPDATE';
+    const requestParams = [id, 'pending', 'checked'];
 
     if (req.user.role === 'moderator') {
       requestQuery = `
         SELECT wr.*
         FROM withdraw_requests wr
         JOIN users u ON wr.user_id = u.id
-        WHERE wr.id = ? AND wr.status = ? AND u.moderator_id = ?
+        WHERE wr.id = ? AND wr.status IN (?, ?) AND u.moderator_id = ?
         FOR UPDATE
       `;
       requestParams.push(req.user.id);
@@ -355,13 +527,18 @@ exports.getAllWithdrawals = async (req, res, next) => {
 
     const baseQuery = `
       SELECT wr.id, wr.user_id, wr.bank_id, wr.withdraw_method, wr.upi_id, wr.phone_number, wr.scanner_image,
-             wr.amount, wr.status, wr.reject_reason, wr.created_at, wr.updated_at,
+             wr.amount, wr.status, wr.reject_reason, wr.checked_by, wr.checked_at, wr.checker_notes, wr.otp_verified,
+             wr.created_at, wr.updated_at,
              u.name as user_name, u.phone as user_phone, u.moderator_id,
              moderator_user.name AS moderator_name,
+             checker_user.name AS checked_by_name,
+             approver_user.name AS approved_by_name,
              ba.account_number, ba.bank_name, ba.account_holder, ba.ifsc, ba.is_flagged
       FROM withdraw_requests wr
       JOIN users u ON wr.user_id = u.id
       LEFT JOIN users moderator_user ON moderator_user.id = u.moderator_id
+      LEFT JOIN users checker_user ON checker_user.id = wr.checked_by
+      LEFT JOIN users approver_user ON approver_user.id = wr.approved_by
       LEFT JOIN bank_accounts ba ON wr.bank_id = ba.id
       ${whereClause}
     `;

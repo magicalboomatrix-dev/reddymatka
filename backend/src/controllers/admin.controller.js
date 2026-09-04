@@ -418,9 +418,9 @@ exports.getUserDetail = async (req, res, next) => {
       }
     }
 
-    const [[userRows], [deposits], [withdrawals], [walletTransactions], [bets], [bonuses], [bankAccounts], [notifications]] = await Promise.all([
+    const [[userRows], [deposits], [withdrawals], [walletTransactions], [bets], [bonuses], [bankAccounts], [notifications], [activityLogs]] = await Promise.all([
       pool.query(`
-        SELECT u.id, u.name, u.phone, u.referral_code, u.is_blocked, u.created_at, u.updated_at,
+        SELECT u.id, u.name, u.phone, u.referral_code, u.is_blocked, u.is_18_plus, u.created_at, u.updated_at,
                u.moderator_id, m.name AS moderator_name, m.phone AS moderator_phone,
                COALESCE(w.balance, 0) AS balance, COALESCE(w.bonus_balance, 0) AS bonus_balance
         FROM users u
@@ -439,11 +439,13 @@ exports.getUserDetail = async (req, res, next) => {
       `, [id]),
       pool.query(`
          SELECT wr.id, wr.bank_id, wr.withdraw_method, wr.upi_id, wr.phone_number,
-           wr.amount, wr.status, wr.reject_reason, wr.created_at, wr.updated_at,
+           wr.amount, wr.status, wr.reject_reason, wr.checked_by, wr.checked_at, wr.checker_notes, wr.otp_verified, wr.created_at, wr.updated_at,
+               checker.name AS checked_by_name,
                approver.id AS approved_by_id, approver.name AS approved_by_name,
                ba.id AS bank_id, ba.bank_name, ba.account_holder, ba.account_number, ba.ifsc, ba.is_flagged
         FROM withdraw_requests wr
-         LEFT JOIN bank_accounts ba ON ba.id = wr.bank_id
+        LEFT JOIN bank_accounts ba ON ba.id = wr.bank_id
+        LEFT JOIN users checker ON checker.id = wr.checked_by
         LEFT JOIN users approver ON approver.id = wr.approved_by
         WHERE wr.user_id = ?
         ORDER BY wr.created_at DESC
@@ -489,6 +491,13 @@ exports.getUserDetail = async (req, res, next) => {
         ORDER BY created_at DESC
         LIMIT 50
       `, [id]),
+      pool.query(`
+        SELECT id, action, entity_type, entity_id, details, ip_address, user_agent, created_at
+        FROM user_activity_logs
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+        LIMIT 200
+      `, [id]),
     ]);
 
     if (userRows.length === 0) {
@@ -504,6 +513,50 @@ exports.getUserDetail = async (req, res, next) => {
       bonuses,
       bank_accounts: bankAccounts,
       notifications,
+      activity_logs: activityLogs,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getUserActivityLogs = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { page, limit, offset } = clampPagination(req.query);
+
+    if (req.user?.role === 'moderator') {
+      const [ownership] = await pool.query(
+        "SELECT id FROM users WHERE id = ? AND role = 'user' AND moderator_id = ? LIMIT 1",
+        [id, req.user.id]
+      );
+      if (ownership.length === 0) {
+        return res.status(403).json({ error: 'Access denied. User not assigned to you.' });
+      }
+    }
+
+    const [countResult] = await pool.query(
+      'SELECT COUNT(*) as total FROM user_activity_logs WHERE user_id = ?',
+      [id]
+    );
+
+    const [logs] = await pool.query(
+      `SELECT id, user_id, action, entity_type, entity_id, details, ip_address, user_agent, created_at
+       FROM user_activity_logs
+       WHERE user_id = ?
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+      [id, limit, offset]
+    );
+
+    res.json({
+      logs,
+      pagination: {
+        page,
+        limit,
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / limit),
+      },
     });
   } catch (error) {
     next(error);

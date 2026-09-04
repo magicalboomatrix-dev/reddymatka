@@ -111,6 +111,8 @@ const LoginAccountPage = () => {
   const [authFlow, setAuthFlow] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
+  const [is18PlusConsent, setIs18PlusConsent] = useState(false);
 
   // Load moderator referral code from localStorage when reaching profile step
   useEffect(() => {
@@ -170,6 +172,7 @@ const LoginAccountPage = () => {
 
       if (authFlow === 'register' && data.isNewUser) {
         setStep(STEPS.PROFILE);
+        setShowDisclaimerModal(true);
       } else if (authFlow === 'firstMpinSetup' && data.resetMpin) {
         setMpin('');
         setMpinConfirm('');
@@ -188,6 +191,11 @@ const LoginAccountPage = () => {
   const handleCompleteProfile = async () => {
     if (!name || name.trim().length < 2) {
       setError('Name must be at least 2 characters');
+      return;
+    }
+    if (!is18PlusConsent) {
+      setError('You must confirm 18+ age consent and accept the educational disclaimer.');
+      setShowDisclaimerModal(true);
       return;
     }
     setError('');
@@ -210,7 +218,7 @@ const LoginAccountPage = () => {
       let data;
 
       if (authFlow === 'register') {
-        data = await authAPI.completeProfile(name.trim(), referralCode, mpin, tempToken);
+        data = await authAPI.completeProfile(name.trim(), referralCode, mpin, tempToken, is18PlusConsent);
         // Clear moderator referral from localStorage after successful registration
         localStorage.removeItem('moderator_ref');
       } else {
@@ -369,6 +377,54 @@ const LoginAccountPage = () => {
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-[430px] mt-6">
+      {/* Pop up at the time of registration: Educational Purpose & 18+ Age Consent */}
+      {showDisclaimerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-100 text-amber-700 font-black text-base shrink-0">
+                18+
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900 leading-tight">Important Notice & Consent</h3>
+                <p className="text-xs text-gray-500">Educational platform confirmation</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-amber-50 border border-amber-300 p-3 text-[13px] text-amber-900 leading-relaxed font-semibold text-center">
+              "This is for educational purpose, no real money involved"
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              All matka games, charts, points and wallet balances on REDDYMATKA are strictly for educational and simulation purposes.
+            </p>
+
+            <div className="border-t border-gray-200 pt-3">
+              <label className="flex items-start gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={is18PlusConsent}
+                  onChange={(e) => setIs18PlusConsent(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#1d1c20] focus:ring-black cursor-pointer"
+                />
+                <span className="text-xs font-semibold text-gray-800 leading-snug">
+                  I confirm that I am 18 years of age or older (18+ Age Consent) and accept this educational disclaimer.
+                </span>
+              </label>
+            </div>
+
+            <button
+              type="button"
+              disabled={!is18PlusConsent}
+              onClick={() => setShowDisclaimerModal(false)}
+              className="w-full rounded bg-[#1d1c20] py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              I Understand & Agree (18+)
+            </button>
+          </div>
+        </div>
+      )}
+
       <main className="flex min-h-screen justify-center ">
         <div className="w-full max-w-105">
           <div className="back-btn mb-4">
@@ -453,6 +509,21 @@ const LoginAccountPage = () => {
                       </p>
                     )}
                   </div>
+
+                  {/* 18+ Age Consent & Educational Disclaimer Checkbox */}
+                  <div className="mt-4 flex items-start gap-2.5 border border-amber-200 bg-amber-50/70 p-3 rounded">
+                    <input
+                      id="profile-age-consent"
+                      type="checkbox"
+                      checked={is18PlusConsent}
+                      onChange={(e) => setIs18PlusConsent(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#1d1c20] cursor-pointer"
+                    />
+                    <label htmlFor="profile-age-consent" className="text-xs text-gray-700 cursor-pointer select-none leading-snug">
+                      <span className="font-bold text-amber-900">18+ Age Consent:</span> I confirm I am 18+ years old and understand that <span className="font-semibold">this is for educational purpose, no real money involved</span>.
+                    </label>
+                  </div>
+
                   <button type="button" className={buttonClass} onClick={handleCompleteProfile} disabled={loading}>
                     {loading ? 'Please wait...' : 'Continue'}
                   </button>

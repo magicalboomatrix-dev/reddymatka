@@ -17,11 +17,13 @@ const withdrawLimiter = rateLimit({
 });
 
 // User routes
+router.post('/send-otp', authenticate, withdrawLimiter, withdrawController.sendWithdrawOtp);
 router.post('/request', authenticate, withdrawLimiter, scannerUpload.single('scanner_image'), withdrawController.requestWithdraw);
 router.get('/history', authenticate, withdrawController.getWithdrawHistory);
 
 // Admin/Moderator routes
 router.get('/all', authenticate, authorize('admin', 'moderator'), withdrawController.getAllWithdrawals);
+router.put('/:id/check',   authenticate, authorize('admin', 'moderator'), adminActivity('check_withdrawal',   'withdraw_request'), withdrawController.checkWithdraw);
 router.put('/:id/approve', authenticate, authorize('admin', 'moderator'), adminActivity('approve_withdrawal', 'withdraw_request'), withdrawController.approveWithdraw);
 router.put('/:id/reject',  authenticate, authorize('admin', 'moderator'), adminActivity('reject_withdrawal',  'withdraw_request'), withdrawController.rejectWithdraw);
 

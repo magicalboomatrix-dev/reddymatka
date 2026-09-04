@@ -35,6 +35,20 @@ const WithDrawPage = () => {
   const [withdrawGuidelines, setWithdrawGuidelines] = useState([])
   const [withdrawalTimeWindows, setWithdrawalTimeWindows] = useState([])
   const [previewImage, setPreviewImage] = useState(null)
+  const [showOtpModal, setShowOtpModal] = useState(false)
+  const [withdrawOtp, setWithdrawOtp] = useState('')
+  const [otpSending, setOtpSending] = useState(false)
+  const [resendTimer, setResendTimer] = useState(0)
+  const [pendingPayload, setPendingPayload] = useState(null)
+  const [pendingMethodLabel, setPendingMethodLabel] = useState('-')
+
+  useEffect(() => {
+    let timer
+    if (resendTimer > 0) {
+      timer = setTimeout(() => setResendTimer((prev) => prev - 1), 1000)
+    }
+    return () => clearTimeout(timer)
+  }, [resendTimer])
 
   const formatDateTime = (value) => {
     if (!value) return '-'
@@ -160,46 +174,83 @@ const WithDrawPage = () => {
       return
     }
 
+    let payload
+    let methodLabel = '-'
+
+    if (withdrawMethod === 'scanner') {
+      payload = new FormData()
+      payload.append('amount', parsedAmount)
+      payload.append('withdraw_method', withdrawMethod)
+      payload.append('scanner_image', scannerImageFile)
+      methodLabel = 'Scanner'
+    } else {
+      payload = { amount: parsedAmount, withdraw_method: withdrawMethod }
+      if (withdrawMethod === 'bank') {
+        payload.bank_account_id = Number(selectedAccountId)
+        const selectedBank = bankAccounts.find((account) => String(account.id) === String(selectedAccountId))
+        methodLabel = selectedBank ? formatBankOption(selectedBank) : '-'
+      } else if (withdrawMethod === 'upi') {
+        payload.upi_id = upiId.trim()
+        methodLabel = `UPI: ${upiId.trim()}`
+      } else if (withdrawMethod === 'phone') {
+        payload.phone_number = phoneNumber.replace(/\D/g, '')
+        methodLabel = `Phone: ${phoneNumber.replace(/\D/g, '')}`
+      }
+    }
+
+    setPendingPayload(payload)
+    setPendingMethodLabel(methodLabel)
+    setWithdrawOtp('')
+    setShowOtpModal(true)
+    sendWithdrawalOtp()
+  }
+
+  const sendWithdrawalOtp = async () => {
+    setOtpSending(true)
+    try {
+      const res = await withdrawAPI.sendOtp()
+      setResendTimer(60)
+      setToast({ message: res.message || 'OTP sent to your registered phone number.', type: 'success' })
+    } catch (err) {
+      setToast({ message: err.message || 'Failed to send OTP.', type: 'error' })
+    } finally {
+      setOtpSending(false)
+    }
+  }
+
+  const handleConfirmWithdrawalWithOtp = async () => {
+    if (!withdrawOtp || withdrawOtp.trim().length !== 6) {
+      setToast({ message: 'Please enter the 6-digit OTP.', type: 'error' })
+      return
+    }
+
     setSubmitting(true)
     try {
-      let payload
-      let methodLabel = '-'
-
-      if (withdrawMethod === 'scanner') {
-        payload = new FormData()
-        payload.append('amount', parsedAmount)
-        payload.append('withdraw_method', withdrawMethod)
-        payload.append('scanner_image', scannerImageFile)
-        methodLabel = 'Scanner'
+      let finalPayload
+      if (pendingPayload instanceof FormData) {
+        finalPayload = pendingPayload
+        finalPayload.set('otp', withdrawOtp.trim())
       } else {
-        payload = { amount: parsedAmount, withdraw_method: withdrawMethod }
-        if (withdrawMethod === 'bank') {
-          payload.bank_account_id = Number(selectedAccountId)
-          const selectedBank = bankAccounts.find((account) => String(account.id) === String(selectedAccountId))
-          methodLabel = selectedBank ? formatBankOption(selectedBank) : '-'
-        } else if (withdrawMethod === 'upi') {
-          payload.upi_id = upiId.trim()
-          methodLabel = `UPI: ${upiId.trim()}`
-        } else if (withdrawMethod === 'phone') {
-          payload.phone_number = phoneNumber.replace(/\D/g, '')
-          methodLabel = `Phone: ${phoneNumber.replace(/\D/g, '')}`
-        }
+        finalPayload = { ...pendingPayload, otp: withdrawOtp.trim() }
       }
 
-      const response = await withdrawAPI.request(payload)
+      const response = await withdrawAPI.request(finalPayload)
       const txId = response?.withdraw?.id
         ? `TXN_WR_${response.withdraw.id}_${Date.now()}`
         : `TXN_WR_${Date.now()}`
 
+      setShowOtpModal(false)
+      const successAmount = amount
       setAmount('')
       setUpiId('')
       setPhoneNumber('')
       setScannerImageFile(null)
+      setWithdrawOtp('')
       await fetchData()
       const params = new URLSearchParams({
         type: 'withdraw',
-        amount: String(parsedAmount),
-        bank: methodLabel,
+        amount: String(successAmount),
+        bank: pendingMethodLabel,
         tx: txId,
         primary: '/withdraw',
         secondary: '/wallet',
@@ -234,6 +285,81 @@ const WithDrawPage = () => {
               &times;
             </button>
             <img src={previewImage} alt="Scanner QR" className="max-w-[90vw] max-h-[70vh] object-contain rounded bg-white p-2" onClick={e => e.stopPropagation()} />
+          </div>
+        </div>
+      )}
+
+      {/* Withdrawal OTP Verification Modal */}
+      {showOtpModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                  OTP
+                </span>
+                <h3 className="text-sm font-bold text-gray-900">Withdrawal Verification</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOtpModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none p-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600 leading-relaxed">
+              We have sent a 6-digit OTP to your registered mobile number to verify withdrawal of <span className="font-bold text-[#111]">₹{Number(amount).toLocaleString('en-IN')}</span>.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5 text-center">
+                Enter 6-Digit OTP
+              </label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={6}
+                value={withdrawOtp}
+                onChange={(e) => setWithdrawOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="••••••"
+                className="w-full text-center tracking-[0.5em] text-2xl font-bold font-mono py-3 border-2 border-gray-300 rounded-lg focus:border-black outline-none bg-gray-50 text-[#111]"
+                autoFocus
+              />
+            </div>
+
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="text-gray-500">
+                {resendTimer > 0 ? `Resend in ${resendTimer}s` : "Didn't receive code?"}
+              </span>
+              <button
+                type="button"
+                disabled={resendTimer > 0 || otpSending}
+                onClick={sendWithdrawalOtp}
+                className="font-semibold text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline"
+              >
+                {otpSending ? 'Sending...' : 'Resend OTP'}
+              </button>
+            </div>
+
+            <div className="flex gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowOtpModal(false)}
+                className="flex-1 rounded border border-gray-300 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={submitting || withdrawOtp.length !== 6}
+                onClick={handleConfirmWithdrawalWithOtp}
+                className="flex-1 rounded bg-[#1d1c20] py-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {submitting ? 'Verifying...' : 'Confirm & Withdraw'}
+              </button>
+            </div>
           </div>
         </div>
       )}

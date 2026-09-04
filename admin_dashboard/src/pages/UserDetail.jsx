@@ -71,6 +71,46 @@ export default function UserDetail() {
   const bonuses = data?.bonuses || [];
   const bankAccounts = data?.bank_accounts || [];
   const notifications = data?.notifications || [];
+  const activityLogs = data?.activity_logs || [];
+
+  const formatLogAction = (action) => {
+    switch (action) {
+      case 'register':
+        return <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs font-bold rounded">Register (18+ Consent)</span>;
+      case 'login_mpin':
+        return <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">MPIN Login</span>;
+      case 'request_withdraw':
+        return <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-semibold rounded">Withdrawal Request</span>;
+      case 'request_withdraw_otp':
+        return <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 text-xs font-semibold rounded">Withdrawal OTP Sent</span>;
+      case 'place_bet':
+        return <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-xs font-semibold rounded">Bet Placed</span>;
+      case 'reset_mpin':
+        return <span className="px-2 py-0.5 bg-orange-100 text-orange-800 text-xs font-semibold rounded">Reset MPIN</span>;
+      default:
+        return <span className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs font-medium rounded capitalize">{String(action).replace(/_/g, ' ')}</span>;
+    }
+  };
+
+  const formatLogDetails = (details) => {
+    if (!details) return '-';
+    try {
+      const obj = typeof details === 'string' ? JSON.parse(details) : details;
+      if (typeof obj !== 'object' || obj === null) return String(details);
+      return (
+        <div className="space-y-0.5 text-[11px] font-mono">
+          {Object.entries(obj).map(([k, v]) => (
+            <div key={k} className="text-gray-600">
+              <span className="text-gray-400 font-sans">{k}: </span>
+              <span className="text-gray-800 font-semibold">{typeof v === 'boolean' ? (v ? 'true' : 'false') : String(v)}</span>
+            </div>
+          ))}
+        </div>
+      );
+    } catch (_) {
+      return String(details);
+    }
+  };
 
   if (loading) {
     return (
@@ -173,8 +213,54 @@ export default function UserDetail() {
     { header: 'Flag', accessor: 'is_flagged', className: 'text-center', cellClass: 'text-xs text-center', render: (row) => row.is_flagged ? (row.flag_reason || 'Flagged') : '-' },
   ];
 
+  const activityLogColumns = [
+    {
+      header: 'Timestamp (IST)',
+      accessor: 'created_at',
+      className: 'text-left',
+      cellClass: 'text-xs text-gray-600 whitespace-nowrap',
+      render: (row) => new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    },
+    {
+      header: 'Action',
+      accessor: 'action',
+      className: 'text-left',
+      cellClass: 'text-xs',
+      render: (row) => formatLogAction(row.action)
+    },
+    {
+      header: 'Details',
+      accessor: 'details',
+      className: 'text-left',
+      cellClass: 'text-xs max-w-xs',
+      render: (row) => formatLogDetails(row.details)
+    },
+    {
+      header: 'Entity',
+      accessor: 'entity_type',
+      className: 'text-left',
+      cellClass: 'text-xs text-gray-600',
+      render: (row) => row.entity_type ? `${row.entity_type}${row.entity_id ? ` #${row.entity_id}` : ''}` : '-'
+    },
+    {
+      header: 'IP Address',
+      accessor: 'ip_address',
+      className: 'text-left',
+      cellClass: 'text-xs font-mono text-gray-600',
+      render: (row) => row.ip_address || '-'
+    },
+    {
+      header: 'User Agent',
+      accessor: 'user_agent',
+      className: 'text-left',
+      cellClass: 'text-[11px] text-gray-500 max-w-[160px] truncate',
+      render: (row) => <span title={row.user_agent}>{row.user_agent || '-'}</span>
+    },
+  ];
+
   const tabs = [
     { id: 'overview', label: 'Overview', count: null },
+    { id: 'logs', label: 'Activity Logs', count: activityLogs.length },
     { id: 'deposits', label: 'Deposits', count: deposits.length },
     { id: 'withdrawals', label: 'Withdrawals', count: withdrawals.length },
     { id: 'wallet', label: 'Wallet', count: walletTransactions.length },
@@ -188,7 +274,18 @@ export default function UserDetail() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h3 className="text-lg sm:text-xl font-semibold text-gray-800">{user.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-800">{user.name}</h3>
+            {user.is_18_plus ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                ✓ 18+ Verified
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                Age Unverified
+              </span>
+            )}
+          </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">User ID: {user.id} • {user.phone}</p>
         </div>
         <div className="flex gap-2">
@@ -214,27 +311,27 @@ export default function UserDetail() {
           <p className="text-lg sm:text-2xl font-bold text-gray-800 mt-1">{deposits.length}</p>
         </div>
         <div className="bg-white border p-3 sm:p-5 rounded">
-          <p className="text-xs sm:text-sm text-gray-500">Bets</p>
-          <p className="text-lg sm:text-2xl font-bold text-amber-700 mt-1">{bets.length}</p>
+          <p className="text-xs sm:text-sm text-gray-500">Activity Logs</p>
+          <p className="text-lg sm:text-2xl font-bold text-indigo-700 mt-1">{activityLogs.length}</p>
         </div>
       </div>
 
-      {/* Mobile Tabs */}
-      <div className="lg:hidden">
-        <div className="flex overflow-x-auto gap-1 pb-2 -mx-2 px-2">
+      {/* Navigation Tabs */}
+      <div>
+        <div className="flex overflow-x-auto gap-1 pb-2 -mx-2 px-2 border-b border-gray-200">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex-shrink-0 px-3 py-2 text-xs font-medium rounded whitespace-nowrap ${
+              className={`flex-shrink-0 px-3 py-2 text-xs sm:text-sm font-medium rounded whitespace-nowrap transition-colors ${
                 activeTab === tab.id 
-                  ? 'bg-blue-600 text-white' 
+                  ? 'bg-blue-600 text-white shadow-sm' 
                   : 'bg-white border text-gray-700 hover:bg-gray-50'
               }`}
             >
               {tab.label}
               {tab.count !== null && (
-                <span className={`ml-1 px-1.5 py-0.5 rounded text-xs ${activeTab === tab.id ? 'bg-white/20' : 'bg-gray-100'}`}>
+                <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs ${activeTab === tab.id ? 'bg-white/20' : 'bg-gray-100 text-gray-600'}`}>
                   {tab.count}
                 </span>
               )}
@@ -243,130 +340,166 @@ export default function UserDetail() {
         </div>
       </div>
 
-      {/* Desktop: Show all sections / Mobile: Show active tab */}
-      <div className={`space-y-4 ${activeTab !== 'overview' && activeTab !== 'deposits' ? 'hidden lg:block' : ''}`}>
-        {/* Overview Section */}
-        {(activeTab === 'overview' || activeTab === 'deposits') && (
-          <div className="bg-white border p-3 sm:p-5 rounded">
-            <h4 className="text-base sm:text-lg font-semibold text-gray-800 mb-3">User Information</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-sm text-gray-600">
-              <div><span className="font-medium text-gray-800">Phone:</span> {user.phone}</div>
-              <div><span className="font-medium text-gray-800">Referral:</span> {user.referral_code}</div>
-              <div><span className="font-medium text-gray-800">Moderator:</span> {user.moderator_name || '-'}</div>
-              <div><span className="font-medium text-gray-800">Status:</span> {user.is_blocked ? <span className="text-red-600">Blocked</span> : <span className="text-green-600">Active</span>}</div>
-              <div><span className="font-medium text-gray-800">Created:</span> {new Date(user.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
-              <div><span className="font-medium text-gray-800">Updated:</span> {new Date(user.updated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
-              <div><span className="font-medium text-gray-800">Withdrawals:</span> {withdrawals.length}</div>
-              <div><span className="font-medium text-gray-800">Wallet Entries:</span> {walletTransactions.length}</div>
+      {/* User Information (Overview Tab) */}
+      {activeTab === 'overview' && (
+        <div className="bg-white border p-3 sm:p-5 rounded">
+          <h4 className="text-base sm:text-lg font-semibold text-gray-800 mb-3">User Information</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs sm:text-sm text-gray-600">
+            <div><span className="font-medium text-gray-800">Phone:</span> {user.phone}</div>
+            <div><span className="font-medium text-gray-800">Referral:</span> {user.referral_code}</div>
+            <div><span className="font-medium text-gray-800">Moderator:</span> {user.moderator_name || '-'}</div>
+            <div><span className="font-medium text-gray-800">Status:</span> {user.is_blocked ? <span className="text-red-600">Blocked</span> : <span className="text-green-600">Active</span>}</div>
+            <div>
+              <span className="font-medium text-gray-800">18+ Consent:</span>{' '}
+              {user.is_18_plus ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">
+                  ✓ Verified (18+)
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-600">
+                  Not Recorded
+                </span>
+              )}
             </div>
+            <div><span className="font-medium text-gray-800">Created:</span> {new Date(user.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
+            <div><span className="font-medium text-gray-800">Updated:</span> {new Date(user.updated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</div>
+            <div><span className="font-medium text-gray-800">Withdrawals:</span> {withdrawals.length}</div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Deposits Section */}
-        {(activeTab === 'overview' || activeTab === 'deposits') && (
-          <div className="bg-white border rounded overflow-hidden">
-            <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-              <h4 className="text-base sm:text-lg font-semibold text-gray-800">Deposits</h4>
-              <span className="text-xs sm:text-sm text-gray-500">{deposits.length} records</span>
+      {/* Activity Logs (Logs Tab or Overview) */}
+      {(activeTab === 'overview' || activeTab === 'logs') && (
+        <div className="bg-white border rounded overflow-hidden">
+          <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h4 className="text-base sm:text-lg font-semibold text-gray-800">User Activity Logs</h4>
+              <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-medium rounded border border-indigo-200">
+                Audit Trail
+              </span>
             </div>
-            <PaginatedTable 
-              data={deposits} 
-              columns={depositColumns} 
-              emptyMessage="No deposits"
-              rowsPerPage={10}
-              maxHeight="400px"
-            />
+            <span className="text-xs sm:text-sm text-gray-500">{activityLogs.length} records</span>
           </div>
-        )}
-      </div>
+          <PaginatedTable 
+            data={activityLogs} 
+            columns={activityLogColumns} 
+            emptyMessage="No activity logs recorded for this user"
+            rowsPerPage={activeTab === 'logs' ? 20 : 10}
+            maxHeight={activeTab === 'logs' ? '650px' : '400px'}
+          />
+        </div>
+      )}
+
+      {/* Deposits Section */}
+      {(activeTab === 'overview' || activeTab === 'deposits') && (
+        <div className="bg-white border rounded overflow-hidden">
+          <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+            <h4 className="text-base sm:text-lg font-semibold text-gray-800">Deposits</h4>
+            <span className="text-xs sm:text-sm text-gray-500">{deposits.length} records</span>
+          </div>
+          <PaginatedTable 
+            data={deposits} 
+            columns={depositColumns} 
+            emptyMessage="No deposits"
+            rowsPerPage={10}
+            maxHeight="400px"
+          />
+        </div>
+      )}
 
       {/* Wallet & Withdrawals */}
-      <div className={`grid grid-cols-1 xl:grid-cols-2 gap-4 ${activeTab !== 'overview' && activeTab !== 'wallet' && activeTab !== 'withdrawals' ? 'hidden lg:grid' : ''}`}>
-        {(activeTab === 'overview' || activeTab === 'wallet') && (
-          <div className="bg-white border rounded overflow-hidden">
-            <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-              <h4 className="text-base sm:text-lg font-semibold text-gray-800">Wallet Transactions</h4>
-              <span className="text-xs sm:text-sm text-gray-500">{walletTransactions.length} records</span>
-            </div>
-            <PaginatedTable 
-              data={walletTransactions} 
-              columns={walletColumns} 
-              emptyMessage="No wallet transactions"
-              rowsPerPage={10}
-              maxHeight="400px"
-            />
-          </div>
-        )}
-
-        {(activeTab === 'overview' || activeTab === 'withdrawals') && (
-          <div className="bg-white border rounded overflow-hidden">
-            <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-              <h4 className="text-base sm:text-lg font-semibold text-gray-800">Withdrawals</h4>
-              <span className="text-xs sm:text-sm text-gray-500">{withdrawals.length} records</span>
-            </div>
-            <PaginatedTable 
-              data={withdrawals} 
-              columns={withdrawalColumns} 
-              emptyMessage="No withdrawals"
-              rowsPerPage={10}
-              maxHeight="400px"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Bets & Bonuses/Banks */}
-      <div className={`grid grid-cols-1 xl:grid-cols-2 gap-4 ${activeTab !== 'overview' && activeTab !== 'bets' && activeTab !== 'bonuses' && activeTab !== 'banks' ? 'hidden lg:grid' : ''}`}>
-        {(activeTab === 'overview' || activeTab === 'bets') && (
-          <div className="bg-white border rounded overflow-hidden">
-            <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-              <h4 className="text-base sm:text-lg font-semibold text-gray-800">Bets</h4>
-              <span className="text-xs sm:text-sm text-gray-500">{bets.length} records</span>
-            </div>
-            <PaginatedTable 
-              data={bets} 
-              columns={betColumns} 
-              emptyMessage="No bets"
-              rowsPerPage={10}
-              maxHeight="400px"
-            />
-          </div>
-        )}
-
-        <div className={`space-y-4 ${activeTab !== 'overview' && activeTab !== 'bonuses' && activeTab !== 'banks' ? 'hidden lg:block' : ''}`}>
-          {(activeTab === 'overview' || activeTab === 'bonuses') && (
+      {(activeTab === 'overview' || activeTab === 'wallet' || activeTab === 'withdrawals') && (
+        <div className={activeTab === 'overview' ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'space-y-4'}>
+          {(activeTab === 'overview' || activeTab === 'wallet') && (
             <div className="bg-white border rounded overflow-hidden">
               <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-                <h4 className="text-base sm:text-lg font-semibold text-gray-800">Bonuses</h4>
-                <span className="text-xs sm:text-sm text-gray-500">{bonuses.length} records</span>
+                <h4 className="text-base sm:text-lg font-semibold text-gray-800">Wallet Transactions</h4>
+                <span className="text-xs sm:text-sm text-gray-500">{walletTransactions.length} records</span>
               </div>
               <PaginatedTable 
-                data={bonuses} 
-                columns={bonusColumns} 
-                emptyMessage="No bonuses"
-                rowsPerPage={5}
-                maxHeight="250px"
+                data={walletTransactions} 
+                columns={walletColumns} 
+                emptyMessage="No wallet transactions"
+                rowsPerPage={10}
+                maxHeight="400px"
               />
             </div>
           )}
 
-          {(activeTab === 'overview' || activeTab === 'banks') && (
+          {(activeTab === 'overview' || activeTab === 'withdrawals') && (
             <div className="bg-white border rounded overflow-hidden">
               <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-                <h4 className="text-base sm:text-lg font-semibold text-gray-800">Bank Accounts</h4>
-                <span className="text-xs sm:text-sm text-gray-500">{bankAccounts.length} records</span>
+                <h4 className="text-base sm:text-lg font-semibold text-gray-800">Withdrawals</h4>
+                <span className="text-xs sm:text-sm text-gray-500">{withdrawals.length} records</span>
               </div>
               <PaginatedTable 
-                data={bankAccounts} 
-                columns={bankAccountColumns} 
-                emptyMessage="No bank accounts"
-                rowsPerPage={5}
-                maxHeight="250px"
+                data={withdrawals} 
+                columns={withdrawalColumns} 
+                emptyMessage="No withdrawals"
+                rowsPerPage={10}
+                maxHeight="400px"
               />
             </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Bets & Bonuses/Banks */}
+      {(activeTab === 'overview' || activeTab === 'bets' || activeTab === 'bonuses' || activeTab === 'banks') && (
+        <div className={activeTab === 'overview' ? 'grid grid-cols-1 xl:grid-cols-2 gap-4' : 'space-y-4'}>
+          {(activeTab === 'overview' || activeTab === 'bets') && (
+            <div className="bg-white border rounded overflow-hidden">
+              <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+                <h4 className="text-base sm:text-lg font-semibold text-gray-800">Bets</h4>
+                <span className="text-xs sm:text-sm text-gray-500">{bets.length} records</span>
+              </div>
+              <PaginatedTable 
+                data={bets} 
+                columns={betColumns} 
+                emptyMessage="No bets"
+                rowsPerPage={10}
+                maxHeight="400px"
+              />
+            </div>
+          )}
+
+          {(activeTab === 'overview' || activeTab === 'bonuses' || activeTab === 'banks') && (
+            <div className="space-y-4">
+              {(activeTab === 'overview' || activeTab === 'bonuses') && (
+                <div className="bg-white border rounded overflow-hidden">
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h4 className="text-base sm:text-lg font-semibold text-gray-800">Bonuses</h4>
+                    <span className="text-xs sm:text-sm text-gray-500">{bonuses.length} records</span>
+                  </div>
+                  <PaginatedTable 
+                    data={bonuses} 
+                    columns={bonusColumns} 
+                    emptyMessage="No bonuses"
+                    rowsPerPage={5}
+                    maxHeight="250px"
+                  />
+                </div>
+              )}
+
+              {(activeTab === 'overview' || activeTab === 'banks') && (
+                <div className="bg-white border rounded overflow-hidden">
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
+                    <h4 className="text-base sm:text-lg font-semibold text-gray-800">Bank Accounts</h4>
+                    <span className="text-xs sm:text-sm text-gray-500">{bankAccounts.length} records</span>
+                  </div>
+                  <PaginatedTable 
+                    data={bankAccounts} 
+                    columns={bankAccountColumns} 
+                    emptyMessage="No bank accounts"
+                    rowsPerPage={5}
+                    maxHeight="250px"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Notifications */}
       {activeTab === 'overview' && (

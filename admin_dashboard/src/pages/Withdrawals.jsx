@@ -57,6 +57,7 @@ export default function Withdrawals() {
   const { toasts, success, error: toastError, dismiss } = useToast();
   const { confirmState, confirm, handleConfirm, handleCancel } = useConfirm();
   const [rejectModal, setRejectModal] = useState({ open: false, id: null, reason: '' });
+  const [checkModal, setCheckModal] = useState({ open: false, id: null, item: null, notes: '' });
 
   // Define loadData before useEffect that references it
   const loadData = async () => {
@@ -89,20 +90,36 @@ export default function Withdrawals() {
 
   useEffect(() => { loadData(); }, [page, filter, filters.search, filters.method, filters.moderator_id, filters.from_date, filters.to_date]);
 
+  const openCheck = (item) => {
+    setCheckModal({ open: true, id: item.id, item, notes: '' });
+  };
+
+  const submitCheck = async () => {
+    const { id, notes } = checkModal;
+    try {
+      await api.put(`/withdraw/${id}/check`, { notes });
+      setCheckModal({ open: false, id: null, item: null, notes: '' });
+      loadData();
+      success('Withdrawal verified by checker and moved to Checked status.');
+    } catch (err) {
+      toastError(err.response?.data?.error || 'Failed to verify withdrawal');
+    }
+  };
+
   const approve = async (id) => {
     const confirmed = await confirm({
-      title: 'Approve Withdrawal',
-      message: 'Approve this withdrawal?',
-      confirmText: 'Approve',
+      title: 'Approve Payout',
+      message: 'Confirm payout and approve this checked withdrawal request?',
+      confirmText: 'Approve Payout',
       variant: 'primary',
     });
     if (!confirmed) return;
     try {
       await api.put(`/withdraw/${id}/approve`);
       loadData();
-      success('Withdrawal approved.');
+      success('Withdrawal payout approved.');
     } catch (err) {
-      toastError(err.response?.data?.error || 'Failed');
+      toastError(err.response?.data?.error || 'Failed to approve');
     }
   };
 
@@ -192,11 +209,101 @@ export default function Withdrawals() {
           </div>
         </div>
       )}
+
+      {/* Checker verification modal */}
+      {checkModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white w-full max-w-md p-6 space-y-4 rounded-lg shadow-xl">
+            <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-100 text-blue-700 font-bold text-xs">
+                  ✓
+                </span>
+                <h3 className="text-base font-bold text-gray-800">Checker Verification</h3>
+              </div>
+              <button
+                onClick={() => setCheckModal({ open: false, id: null, item: null, notes: '' })}
+                className="text-gray-400 hover:text-gray-600 text-xl font-bold leading-none p-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            {checkModal.item && (
+              <div className="bg-gray-50 border p-3 rounded text-xs space-y-1.5 text-gray-700">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">User:</span>
+                  <span className="font-semibold text-gray-900">{checkModal.item.user_name} ({checkModal.item.user_phone})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Amount:</span>
+                  <span className="font-bold text-red-700 text-sm">₹{parseFloat(checkModal.item.amount).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Method:</span>
+                  <span className="font-semibold uppercase">{checkModal.item.withdraw_method}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">OTP Status:</span>
+                  <span className={checkModal.item.otp_verified ? 'text-green-700 font-bold' : 'text-amber-600 font-medium'}>
+                    {checkModal.item.otp_verified ? '✓ Verified (OTP Confirmed)' : 'Unverified'}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
+                Checker Notes / Remarks (Optional)
+              </label>
+              <textarea
+                className="w-full border border-gray-300 px-3 py-2 text-sm resize-none rounded focus:ring-1 focus:ring-blue-500 outline-none"
+                rows={3}
+                placeholder="e.g. Verified bank IFSC, betting history clean, recommended for payout..."
+                value={checkModal.notes}
+                onChange={(e) => setCheckModal((m) => ({ ...m, notes: e.target.value }))}
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t">
+              <button
+                onClick={() => setCheckModal({ open: false, id: null, item: null, notes: '' })}
+                className="px-4 py-2 text-xs border text-gray-600 hover:bg-gray-50 rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitCheck}
+                className="px-4 py-2 text-xs bg-blue-600 text-white hover:bg-blue-700 font-semibold rounded"
+              >
+                Mark Verified & Move to Checked
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Maker-Checker Info Banner */}
+      <div className="bg-blue-50 border-l-4 border-blue-600 p-3 text-xs text-blue-900 flex items-center justify-between gap-3 rounded-r">
+        <div className="flex items-center gap-2">
+          <span className="font-bold uppercase text-[10px] bg-blue-200 text-blue-900 px-2 py-0.5 rounded">
+            Maker-Checker
+          </span>
+          <span>
+            Direct payout is disabled. Review & verify requests in <strong>Pending</strong>, then approve payout in <strong>Checked</strong>.
+          </span>
+        </div>
+      </div>
+
       <div className="flex gap-2">
-        {['pending', 'approved', 'rejected'].map((s) => (
+        {['pending', 'checked', 'approved', 'rejected'].map((s) => (
           <button key={s} onClick={() => { setFilter(s); setPage(1); }}
-            className={`px-4 py-2 text-sm font-medium capitalize ${filter === s ? 'bg-primary-600 text-white' : 'bg-white border text-gray-600 hover:bg-gray-50'}`}>
-            {s}
+            className={`px-4 py-2 text-sm font-medium capitalize rounded ${
+              filter === s
+                ? (s === 'checked' ? 'bg-blue-600 text-white' : 'bg-primary-600 text-white')
+                : 'bg-white border text-gray-600 hover:bg-gray-50'
+            }`}>
+            {s === 'checked' ? 'Checked (Ready for Payout)' : s}
           </button>
         ))}
       </div>
@@ -306,10 +413,14 @@ export default function Withdrawals() {
               <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Method</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Payment Info</th>
+              <th className="text-center px-4 py-3 font-medium text-gray-600">OTP</th>
               <th className="text-center px-4 py-3 font-medium text-gray-600">Flagged</th>
               <th className="text-center px-4 py-3 font-medium text-gray-600">Status</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">Checker</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-              {filter === 'pending' && <th className="text-center px-4 py-3 font-medium text-gray-600">Actions</th>}
+              {(filter === 'pending' || filter === 'checked') && (
+                <th className="text-center px-4 py-3 font-medium text-gray-600">Actions</th>
+              )}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -352,27 +463,77 @@ export default function Withdrawals() {
                   <td className="px-4 py-3">{methodBadge}</td>
                   <td className="px-4 py-3">{paymentInfo}</td>
                   <td className="px-4 py-3 text-center">
+                    {w.otp_verified ? (
+                      <span className="px-2 py-0.5 bg-green-100 text-green-800 text-[11px] font-bold rounded">
+                        ✓ Verified
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 text-xs">-</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-center">
                     {isBankFlagged ? <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium">⚑ Flagged</span> : '-'}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-1 text-xs font-medium ${
+                    <span className={`px-2 py-1 text-xs font-medium rounded ${
                       w.status === 'approved' ? 'bg-green-100 text-green-700'
                         : w.status === 'rejected' ? 'bg-red-100 text-red-700'
+                        : w.status === 'checked' ? 'bg-blue-100 text-blue-700 font-semibold'
                         : 'bg-yellow-100 text-yellow-700'
-                    }`}>{w.status}</span>
+                    }`}>{w.status === 'checked' ? 'Checked' : w.status}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-gray-700">
+                    {w.checked_by_name ? (
+                      <div>
+                        <span className="font-semibold text-blue-900">{w.checked_by_name}</span>
+                        {w.checker_notes && (
+                          <div className="text-[10px] text-gray-500 italic max-w-[130px] truncate" title={w.checker_notes}>
+                            "{w.checker_notes}"
+                          </div>
+                        )}
+                      </div>
+                    ) : <span className="text-gray-400">-</span>}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{new Date(w.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</td>
                   {filter === 'pending' && (
-                    <td className="px-4 py-3 text-center space-x-2">
-                      <button onClick={() => approve(w.id)} className="px-3 py-1 bg-green-600 text-white text-xs hover:bg-green-700">Approve</button>
-                      <button onClick={() => reject(w.id)} className="px-3 py-1 bg-red-600 text-white text-xs hover:bg-red-700">Reject</button>
+                    <td className="px-4 py-3 text-center space-x-1.5 whitespace-nowrap">
+                      <button
+                        onClick={() => openCheck(w)}
+                        className="px-2.5 py-1 bg-blue-600 text-white text-xs hover:bg-blue-700 font-semibold rounded shadow-sm"
+                        title="Verify details and move to Checked queue"
+                      >
+                        Check / Verify
+                      </button>
+                      <button
+                        onClick={() => reject(w.id)}
+                        className="px-2.5 py-1 bg-red-600 text-white text-xs hover:bg-red-700 font-medium rounded shadow-sm"
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  )}
+                  {filter === 'checked' && (
+                    <td className="px-4 py-3 text-center space-x-1.5 whitespace-nowrap">
+                      <button
+                        onClick={() => approve(w.id)}
+                        className="px-2.5 py-1 bg-green-600 text-white text-xs hover:bg-green-700 font-semibold rounded shadow-sm"
+                        title="Authorize payout for checked withdrawal"
+                      >
+                        Approve Payout
+                      </button>
+                      <button
+                        onClick={() => reject(w.id)}
+                        className="px-2.5 py-1 bg-red-600 text-white text-xs hover:bg-red-700 font-medium rounded shadow-sm"
+                      >
+                        Reject
+                      </button>
                     </td>
                   )}
                 </tr>
               );
             })}
             {withdrawals.length === 0 && (
-              <tr><td colSpan={10} className="px-4 py-8 text-center text-gray-400">{loading ? 'Loading...' : 'No withdrawals'}</td></tr>
+              <tr><td colSpan={12} className="px-4 py-8 text-center text-gray-400">{loading ? 'Loading...' : 'No withdrawals'}</td></tr>
             )}
           </tbody>
         </table>

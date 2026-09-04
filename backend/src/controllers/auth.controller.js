@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { sendOtpSms } = require('../utils/sms');
 const { getPhoneCandidates, toE164Phone } = require('../utils/phone');
+const { recordUserActivity } = require('../utils/user-activity');
 
 const MAX_MPIN_ATTEMPTS = 5;
 const MPIN_BLOCK_MINUTES = 30;
@@ -185,11 +186,11 @@ exports.verifyOTP = async (req, res, next) => {
   }
 };
 
-// Complete profile (new user registration) — now also requires MPIN
+// Complete profile (new user registration) — now also requires MPIN and 18+ age consent
 exports.completeProfile = async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
-    const { name, referralCode, mpin } = req.body;
+    const { name, referralCode, mpin, is_18_plus } = req.body;
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -201,6 +202,13 @@ exports.completeProfile = async (req, res, next) => {
 
     if (decoded.purpose !== 'profile_completion') {
       return res.status(401).json({ error: 'Invalid token for profile completion.' });
+    }
+
+    // Require 18+ age consent
+    if (is_18_plus !== true && is_18_plus !== 1 && is_18_plus !== '1') {
+      return res.status(400).json({
+        error: 'You must confirm that you are 18 years of age or older and accept the educational disclaimer.'
+      });
     }
 
     if (!name || name.trim().length < 2) {
@@ -233,7 +241,7 @@ exports.completeProfile = async (req, res, next) => {
     const mpinHash = await bcrypt.hash(mpin, 10);
     const userReferralCode = generateReferralCode();
     const [result] = await conn.query(
-      'INSERT INTO users (name, phone, role, moderator_id, referral_code, mpin_hash, mpin_enabled) VALUES (?, ?, ?, ?, ?, ?, 1)',
+      'INSERT INTO users (name, phone, role, moderator_id, referral_code, mpin_hash, mpin_enabled, is_18_plus) VALUES (?, ?, ?, ?, ?, ?, 1, 1)',
       [name.trim(), decoded.phone, 'user', assignedModeratorId, userReferralCode, mpinHash]
     );
 
@@ -264,6 +272,22 @@ exports.completeProfile = async (req, res, next) => {
     });
 
     setAuthCookie(res, jwtToken);
+
+    await recordUserActivity({
+      userId,
+      action: 'register',
+      entityType: 'user',
+      entityId: userId,
+      details: {
+        name: name.trim(),
+        phone: decoded.phone,
+        is_18_plus: 1,
+        educational_disclaimer_accepted: true,
+        referral_code: userReferralCode,
+      },
+      req,
+    });
+
     res.status(201).json({
       message: 'Profile created successfully.',
       token: jwtToken,
@@ -340,6 +364,15 @@ exports.resetMpin = async (req, res, next) => {
       [mpinHash, decoded.id]
     );
 
+    await recordUserActivity({
+      userId: decoded.id,
+      action: 'reset_mpin',
+      entityType: 'user',
+      entityId: decoded.id,
+      details: { method: 'otp_verified' },
+      req,
+    });
+
     res.json({ message: 'MPIN reset successfully. You can now login with your new MPIN.' });
   } catch (error) {
     next(error);
@@ -400,14 +433,15 @@ exports.loginMpin = async (req, res, next) => {
           [newAttempts, blockedUntil, user.id]
         );
         return res.status(429).json({
-          error: `Too many failed attempts. Account locked for ${MPIN_BLOCK_MINUTES} minutes.`,
+          error: `Too many failed attempts. Account blocked for ${MPIN_BLOCK_MINUTES} minutes.`,
           blockedUntil
         });
       }
 
       await pool.query('UPDATE users SET mpin_attempts = ? WHERE id = ?', [newAttempts, user.id]);
       return res.status(401).json({
-        error: `Invalid MPIN. ${remaining} attempt(s) remaining.`
+        error: `Invalid MPIN. ${remaining} attempt(s) remaining.`,
+        remainingAttempts: remaining
       });
     }
 
@@ -419,6 +453,16 @@ exports.loginMpin = async (req, res, next) => {
     });
 
     setAuthCookie(res, token);
+
+    await recordUserActivity({
+      userId: user.id,
+      action: 'login_mpin',
+      entityType: 'user',
+      entityId: user.id,
+      details: { method: 'mpin' },
+      req,
+    });
+
     res.json({
       message: 'Login successful.',
       token,

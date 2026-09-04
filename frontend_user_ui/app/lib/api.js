@@ -70,9 +70,9 @@ export const authAPI = {
   checkUser: (phone) => request('/auth/check-user', { method: 'POST', body: JSON.stringify({ phone }) }),
   sendOTP: (phone, purpose) => request('/auth/send-otp', { method: 'POST', body: JSON.stringify({ phone, purpose }) }),
   verifyOTP: (phone, otp, purpose) => request('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ phone, otp, purpose }) }),
-  completeProfile: (name, referralCode, mpin, tempToken) => request('/auth/complete-profile', {
+  completeProfile: (name, referralCode, mpin, tempToken, is18Plus = true) => request('/auth/complete-profile', {
     method: 'POST',
-    body: JSON.stringify({ name, referralCode, mpin }),
+    body: JSON.stringify({ name, referralCode, mpin, is_18_plus: is18Plus ? 1 : 0 }),
     headers: { 'Authorization': `Bearer ${tempToken}` },
   }),
   setMpin: (mpin) => request('/auth/set-mpin', { method: 'POST', body: JSON.stringify({ mpin }) }),
@@ -133,6 +133,7 @@ export const autoDepositAPI = {
 
 // Withdrawals
 export const withdrawAPI = {
+  sendOtp: () => request('/withdraw/send-otp', { method: 'POST' }),
   request: (data) => request('/withdraw/request', { method: 'POST', body: data instanceof FormData ? data : JSON.stringify(data) }),
   history: (params) => request(`/withdraw/history${buildQuery(params)}`),
 };
