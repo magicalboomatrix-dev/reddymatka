@@ -44,6 +44,7 @@ CREATE TABLE `deposits` (
   `payment_method` varchar(50) DEFAULT NULL,
   `payment_url` text DEFAULT NULL,
   `payer_vpa` varchar(150) DEFAULT NULL,
+  `payer_name` varchar(150) DEFAULT NULL,
   `utr_number` varchar(100) DEFAULT NULL,
   `failure_reason` varchar(255) DEFAULT NULL,
   `raw_response` text DEFAULT NULL,
@@ -67,4 +68,15 @@ ALTER TABLE `users`
   DROP COLUMN IF EXISTS `scanner_label`,
   DROP COLUMN IF EXISTS `scanner_enabled`,
   DROP COLUMN IF EXISTS `upi_id`;
+
+-- 7. Drop obsolete experimental tables if present
+DROP TABLE IF EXISTS `aviator_bets`;
+DROP TABLE IF EXISTS `aviator_rounds`;
+DROP TABLE IF EXISTS `aviator_settings`;
+
+-- 8. Ensure deposit limits exist in settings table
+INSERT INTO `settings` (`setting_key`, `setting_value`) VALUES
+  ('min_deposit', '100'),
+  ('max_deposit', '50000')
+ON DUPLICATE KEY UPDATE `setting_value` = `setting_value`;
 
