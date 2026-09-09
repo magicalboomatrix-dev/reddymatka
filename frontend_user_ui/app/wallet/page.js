@@ -200,7 +200,6 @@ export default function WalletPage() {
       socket.off('wallet_updated', handleWalletUpdated);
       disconnectSocket();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const withdrawableAmount = Number(wallet?.available_withdrawal ?? wallet?.balance ?? 0);

@@ -9,7 +9,6 @@ import {
   Clock,
   CheckCircle,
   TrendingUp,
-  Smartphone,
   QrCode,
   Copy,
   Check,
@@ -25,7 +24,6 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
-  SmartphoneIcon,
   Shield,
   FileText
 } from 'lucide-react';
@@ -34,56 +32,12 @@ function formatCurrency(value) {
   return `₹${Number(value || 0).toLocaleString('en-IN')}`;
 }
 
-function formatScannerAuditField(fieldName) {
-  const labels = {
-    scanner_label: 'Scanner Label',
-    upi_id: 'UPI ID',
-    scanner_enabled: 'Scanner Status',
-  };
-
-  return labels[fieldName] || fieldName || '-';
-}
-
-function formatScannerAuditValue(fieldName, value) {
-  if (!value) {
-    return '-';
-  }
-
-  return value;
-}
-
-function parseUpiDetails(upiId) {
-  const value = String(upiId || '').trim();
-
-  if (!value) {
-    return {
-      full: '',
-      username: '',
-      handle: '',
-      isValid: false,
-    };
-  }
-
-  const [username = '', handle = ''] = value.split('@');
-
-  return {
-    full: value,
-    username,
-    handle,
-    isValid: Boolean(username && handle),
-  };
-}
-
 export default function ModeratorDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const { toasts, success, error: toastError, dismiss } = useToast();
-  
-  const [scannerForm, setScannerForm] = useState({ upi_id: '', scanner_label: '', scanner_enabled: false });
-  const [scannerEditing, setScannerEditing] = useState(false);
-  const [scannerSaving, setScannerSaving] = useState(false);
   
   const [pwForm, setPwForm] = useState({ newPassword: '', confirmPassword: '' });
   const [pwSaving, setPwSaving] = useState(false);
@@ -102,14 +56,6 @@ export default function ModeratorDetail() {
     try {
       const res = await api.get(`/admin/moderators/${id}/detail`);
       setData(res.data || null);
-      if (res.data?.moderator) {
-        const m = res.data.moderator;
-        setScannerForm({
-          upi_id: m.upi_id || '',
-          scanner_label: m.scanner_label || '',
-          scanner_enabled: !!m.scanner_enabled,
-        });
-      }
     } catch (error) {
       console.error(error);
       setData(null);
@@ -121,25 +67,6 @@ export default function ModeratorDetail() {
   useEffect(() => {
     loadDetail();
   }, [id]);
-
-  const handleScannerSave = async (e) => {
-    e.preventDefault();
-    setScannerSaving(true);
-    try {
-      await api.put(`/moderators/${id}/scanner`, {
-        upi_id: scannerForm.upi_id.trim(),
-        scanner_label: scannerForm.scanner_label.trim(),
-        scanner_enabled: scannerForm.scanner_enabled,
-      });
-      success('Scanner / UPI updated successfully.');
-      setScannerEditing(false);
-      loadDetail();
-    } catch (err) {
-      toastError(err.response?.data?.error || 'Failed to update scanner.');
-    } finally {
-      setScannerSaving(false);
-    }
-  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -186,9 +113,7 @@ export default function ModeratorDetail() {
   const deposits = data?.deposit_transactions || [];
   const assignedUsers = data?.assigned_users || [];
   const notifications = data?.notifications || [];
-  const scannerAuditHistory = data?.scanner_audit_history || [];
   const referredUsers = data?.referred_users || [];
-  const upiDetails = parseUpiDetails(moderator?.upi_id);
 
   // Dynamic APK sharing invite link
   const inviteLink = moderator?.referral_code
@@ -299,25 +224,11 @@ export default function ModeratorDetail() {
     { header: 'Date', accessor: 'created_at', className: 'text-left', cellClass: 'text-xs text-gray-500 font-medium', render: (row) => new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) },
   ];
 
-  const scannerAuditColumns = [
-    { header: 'Date', accessor: 'created_at', className: 'text-left', cellClass: 'text-xs text-gray-500 font-medium whitespace-nowrap', render: (row) => new Date(row.created_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) },
-    { header: 'Changed By', accessor: 'actor_name', className: 'text-left', cellClass: 'text-xs text-gray-700', render: (row) => (
-      <div>
-        <div className="font-semibold text-gray-800 leading-tight">{row.actor_name || 'System'}</div>
-        <div className="text-gray-400 text-[10px] mt-0.5 capitalize">{row.actor_role || '-'}</div>
-      </div>
-    )},
-    { header: 'Field', accessor: 'field_name', className: 'text-left', cellClass: 'text-xs font-semibold text-slate-700', render: (row) => formatScannerAuditField(row.field_name) },
-    { header: 'From', accessor: 'old_value', className: 'text-left', cellClass: 'text-xs text-gray-500 font-mono break-all', render: (row) => formatScannerAuditValue(row.field_name, row.old_value) },
-    { header: 'To', accessor: 'new_value', className: 'text-left', cellClass: 'text-xs text-slate-800 font-semibold font-mono break-all', render: (row) => formatScannerAuditValue(row.field_name, row.new_value) },
-  ];
-
   const tabs = [
     { id: 'overview', label: 'Overview', count: null },
     { id: 'deposits', label: 'Deposits', count: deposits.length },
     { id: 'users', label: 'Assigned Users', count: assignedUsers.length },
     { id: 'referrals', label: 'Referrals', count: referredUsers.length },
-    { id: 'audit', label: 'Scanner History', count: scannerAuditHistory.length },
   ];
 
   const whatsappMessage = encodeURIComponent(`Hello! Click here to download the official REDDYMATKA APK and register using my direct agent link to get started: ${inviteLink}`);
@@ -501,126 +412,6 @@ export default function ModeratorDetail() {
               </div>
             </div>
           </div>
-
-          {/* Scanner UPI Settings Card */}
-          <div className="bg-white border border-slate-100 rounded-2xl p-5 sm:p-6 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <Smartphone size={16} />
-                </div>
-                <h4 className="text-base sm:text-lg font-bold text-slate-800">Scanner & UPI Configuration</h4>
-              </div>
-              <button
-                onClick={() => setScannerEditing((v) => !v)}
-                className={`inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                  scannerEditing 
-                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-500' 
-                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow active:scale-95'
-                }`}
-              >
-                {scannerEditing ? 'Cancel' : <><Edit2 size={12} /> Edit Scanner</>}
-              </button>
-            </div>
-
-            {scannerEditing ? (
-              <form onSubmit={handleScannerSave} className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">UPI ID</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. merchant@upi"
-                      value={scannerForm.upi_id}
-                      onChange={(e) => setScannerForm((p) => ({ ...p, upi_id: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-xl transition-all"
-                    />
-                    {scannerForm.upi_id && !scannerForm.upi_id.includes('@') && (
-                      <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1 font-medium"><AlertTriangle size={12} /> UPI ID must include @handle</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Scanner Display Label</label>
-                    <input
-                      type="text"
-                      placeholder="Display name for players"
-                      value={scannerForm.scanner_label}
-                      onChange={(e) => setScannerForm((p) => ({ ...p, scanner_label: e.target.value }))}
-                      className="w-full px-3.5 py-2.5 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 rounded-xl transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2.5 bg-slate-50/50 border border-slate-100 rounded-xl p-3">
-                  <input
-                    type="checkbox"
-                    id="scanner_enabled_admin_card"
-                    checked={scannerForm.scanner_enabled}
-                    onChange={(e) => setScannerForm((p) => ({ ...p, scanner_enabled: e.target.checked }))}
-                    className="w-4.5 h-4.5 text-amber-500 focus:ring-amber-500 border-slate-300 rounded cursor-pointer transition-all"
-                  />
-                  <label htmlFor="scanner_enabled_admin_card" className="text-xs sm:text-sm font-semibold text-slate-700 cursor-pointer select-none">
-                    Enable scanner (displays scanner QR and UPI ID to players for deposits)
-                  </label>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={scannerSaving}
-                  className="px-5 py-2.5 bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-50 rounded-xl shadow transition-all active:scale-95"
-                >
-                  {scannerSaving ? 'Saving…' : 'Save Scanner Settings'}
-                </button>
-              </form>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-slate-600 text-xs sm:text-sm">
-                
-                <div className="border border-slate-50 rounded-xl p-3 flex items-start gap-2.5">
-                  <Smartphone size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Scanner Label</span>
-                    <span className="font-semibold text-slate-800">{moderator.scanner_label || <span className="text-slate-400 italic">No custom label</span>}</span>
-                  </div>
-                </div>
-
-                <div className="border border-slate-50 rounded-xl p-3 flex items-start gap-2.5">
-                  <Shield size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Scanner Status</span>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${
-                      moderator.scanner_enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {moderator.scanner_enabled ? 'Active/Visible' : 'Inactive/Hidden'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="border border-slate-50 rounded-xl p-3 flex items-start gap-2.5 sm:col-span-2">
-                  <ExternalLink size={16} className="text-slate-400 mt-0.5 flex-shrink-0" />
-                  <div className="min-w-0">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">UPI Configuration</span>
-                    <span className="font-mono font-bold text-slate-800 break-all select-all block mt-0.5">
-                      {upiDetails.full || <span className="text-rose-500 font-normal italic">No UPI ID set</span>}
-                    </span>
-                    {upiDetails.full && (
-                      <div className="flex gap-4 mt-1.5 text-[10px] font-medium text-slate-400">
-                        <span>User: <strong className="text-slate-600 font-bold">{upiDetails.username}</strong></span>
-                        <span>Handle: <strong className="text-slate-600 font-bold">@{upiDetails.handle}</strong></span>
-                        <span className="inline-flex items-center gap-0.5">
-                          Format: 
-                          <strong className={upiDetails.isValid ? 'text-emerald-600 font-bold' : 'text-amber-600 font-bold'}>
-                            {upiDetails.isValid ? 'Valid' : 'Invalid'}
-                          </strong>
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-              </div>
-            )}
-          </div>
-
         </div>
 
         {/* Column 3: The Premium Agent Link & APK Download QR Section */}
@@ -818,25 +609,7 @@ export default function ModeratorDetail() {
         </div>
       </div>
 
-      {/* 3. Scanner Change History Card */}
-      <div className={`bg-white border border-slate-100 rounded-2xl shadow-sm overflow-hidden ${
-        activeTab !== 'overview' && activeTab !== 'audit' ? 'hidden lg:block' : ''
-      }`}>
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Smartphone size={16} className="text-amber-500" />
-            <h4 className="text-sm sm:text-base font-bold text-slate-800">Scanner Audit Log</h4>
-          </div>
-          <span className="bg-slate-100 text-slate-500 px-2 py-0.5 text-xs font-bold rounded-full">{scannerAuditHistory.length} events</span>
-        </div>
-        <PaginatedTable 
-          data={scannerAuditHistory} 
-          columns={scannerAuditColumns} 
-          emptyMessage="No modifications are recorded in the scanner audit log"
-          rowsPerPage={10}
-          maxHeight="400px"
-        />
-      </div>
+
 
       {/* ── Bottom Section (Overview Only) ────────────────────────────── */}
       {activeTab === 'overview' && (

@@ -18,15 +18,11 @@ router.get('/moderator-stats/:id/transactions', authenticate, authorize('admin')
 router.get('/moderators/:id/detail', authenticate, authorize('admin'), adminController.getModeratorDetail);
 router.get('/users/:id/detail', authenticate, authorize('admin', 'moderator'), adminController.getUserDetail);
 router.get('/users/:id/logs', authenticate, authorize('admin', 'moderator'), adminController.getUserActivityLogs);
-router.get('/fraud-logs', authenticate, authorize('admin'), adminController.getFraudLogs);
-router.get('/fraud-alerts', authenticate, authorize('admin'), adminController.getFraudAlerts);
 router.get('/dashboard-stats', authenticate, authorize('admin'), adminController.getDashboardStats);
 router.get('/payout-rates', authenticate, authorize('admin'), adminController.getPayoutRates);
 router.put('/payout-rates', authenticate, authorize('admin'), adminActivity('update_payout_rates', 'settings'), adminController.updatePayoutRates);
 router.get('/bonus-rates', authenticate, authorize('admin'), adminController.getBonusRates);
 router.put('/bonus-rates', authenticate, authorize('admin'), adminActivity('update_bonus_rates', 'settings'), adminController.updateBonusRates);
-router.get('/upi-management', authenticate, authorize('admin'), adminController.getUpiManagement);
-router.put('/upi-management/admin-upi', authenticate, authorize('admin'), adminActivity('update_admin_upi', 'settings'), adminController.updateAdminUpi);
 router.get('/referrals', authenticate, authorize('admin'), adminController.listReferrals);
 router.get('/financial-report', authenticate, authorize('admin'), adminController.getFinancialReport);
 router.get('/system-alerts', authenticate, authorize('admin'), adminController.getSystemAlerts);

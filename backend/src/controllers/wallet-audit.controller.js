@@ -56,7 +56,7 @@ async function attachWalletTransactionLinks(transactions) {
   const [deposits, withdrawals, bets] = await Promise.all([
     depositIds.size > 0
       ? pool.query(
-          `SELECT id, order_id, webhook_txn_id, utr_number
+          `SELECT id, order_id, gateway_txn_id, utr_number
            FROM deposits
            WHERE id IN (?)`,
           [[...depositIds]]

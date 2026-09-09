@@ -313,7 +313,6 @@ const HomePage = () => {
       clearInterval(resultsIntervalRef.current);
       clearInterval(winnersIntervalRef.current);
     };
-    // eslint-disable-next-line
   }, []);
 
   // Chart reload on month/year change
@@ -353,7 +352,6 @@ const HomePage = () => {
       socket.off('recent_winner');
       disconnectSocket();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Memoized helpers

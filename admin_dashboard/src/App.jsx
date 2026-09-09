@@ -12,19 +12,15 @@ import Games from './pages/Games';
 import Settings from './pages/Settings';
 import Jantri from './pages/Jantri';
 import Notifications from './pages/Notifications';
-import FraudLogs from './pages/FraudLogs';
 import SystemAlerts from './pages/SystemAlerts';
 import ModeratorDetail from './pages/ModeratorDetail';
 import UserDetail from './pages/UserDetail';
 import Results from './pages/Results';
 import CustomAds from './pages/CustomAds';
-import AutoDeposits from './pages/AutoDeposits';
-import UpiManagement from './pages/UpiManagement';
 import SettlementMonitor from './pages/SettlementMonitor';
 import WalletTransactions from './pages/WalletTransactions';
 import BonusTransactions from './pages/BonusTransactions';
 import FinancialReport from './pages/FinancialReport';
-import MyScanner from './pages/MyScanner';
 import HowToPlay from './pages/HowToPlay';
 import Referrals from './pages/Referrals';
 import Support from './pages/Support';
@@ -36,8 +32,6 @@ const APP_ROUTES = [
   { path: 'moderators', element: <Moderators /> },
   { path: 'moderators/:id', element: <ModeratorDetail /> },
   { path: 'deposits', element: <Deposits /> },
-  { path: 'auto-deposits', element: <AutoDeposits /> },
-  { path: 'upi-management', element: <UpiManagement /> },
   { path: 'withdrawals', element: <Withdrawals /> },
   { path: 'bets', element: <Bets /> },
   { path: 'games', element: <Games /> },
@@ -45,15 +39,12 @@ const APP_ROUTES = [
   { path: 'settings', element: <Settings /> },
   { path: 'jantri', element: <Jantri /> },
   { path: 'notifications', element: <Notifications /> },
-  { path: 'fraud-logs', element: <FraudLogs /> },
   { path: 'system-alerts', element: <SystemAlerts /> },
   { path: 'custom-ads', element: <CustomAds /> },
   { path: 'settlement-monitor', element: <SettlementMonitor /> },
   { path: 'wallet-transactions', element: <WalletTransactions /> },
   { path: 'financial-report', element: <FinancialReport /> },
   { path: 'bonus-transactions', element: <BonusTransactions /> },
-  { path: 'wallet-audit', element: <Navigate to="/wallet-transactions" replace /> },
-  { path: 'my-scanner', element: <MyScanner /> },
   { path: 'how-to-play', element: <HowToPlay /> },
   { path: 'referrals', element: <Referrals /> },
   { path: 'support', element: <Support /> },
@@ -81,7 +72,6 @@ function AppRoutes() {
             element={route.element}
           />
         ))}
-        <Route path="fraud-alerts" element={<Navigate to="/fraud-logs" replace />} />
       </Route>
     </Routes>
   );

@@ -124,12 +124,11 @@ export const betAPI = {
   recentWinners: (params = {}) => request(`/bets/recent-winners${buildQuery(params)}`),
 };
 
-// Auto Deposits (UPI auto-detection)
-export const autoDepositAPI = {
-  createOrder: (amount) => request('/auto-deposit/order', { method: 'POST', body: JSON.stringify({ amount }) }),
-  getOrderStatus: (id) => request(`/auto-deposit/order/status/${id}`),
-  getMyOrders: (params) => request(`/auto-deposit/orders${buildQuery(params)}`),
-  cancelOrder: (id) => request(`/auto-deposit/order/${id}/cancel`, { method: 'POST' }),
+// Deposits (Juspay Gateway)
+export const depositAPI = {
+  createOrder: (amount) => request('/deposits/create-order', { method: 'POST', body: JSON.stringify({ amount }) }),
+  getOrderStatus: (orderId, params = {}) => request(`/deposits/order-status/${orderId}${buildQuery(params)}`),
+  getMyDeposits: (params) => request(`/deposits/my-deposits${buildQuery(params)}`),
 };
 
 // Withdrawals

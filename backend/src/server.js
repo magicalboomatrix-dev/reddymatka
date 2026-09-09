@@ -18,20 +18,15 @@ const bonusRoutes = require('./routes/bonus.routes');
 const resultRoutes = require('./routes/result.routes');
 const jantriRoutes = require('./routes/jantri.routes');
 const moderatorRoutes = require('./routes/moderator.routes');
-const moderatorSelfRoutes = require('./routes/moderator-self.routes');
 const adminRoutes = require('./routes/admin.routes');
 const notificationRoutes = require('./routes/notification.routes');
 const customAdsRoutes = require('./routes/home-banner.routes');
-const smsWebhookRoutes = require('./routes/sms-webhook.routes');
-const autoDepositRoutes = require('./routes/auto-deposit.routes');
 const settlementMonitorRoutes = require('./routes/settlement-monitor.routes');
 const walletAuditRoutes = require('./routes/wallet-audit.routes');
 const howToPlayRoutes = require('./routes/how-to-play.routes');
 const supportRoutes = require('./routes/support.routes');
 
 const { errorHandler } = require('./middleware/error.middleware');
-const { expirePendingOrders } = require('./services/auto-deposit-matcher');
-const { startRetryWorker } = require('./services/auto-deposit-retry');
 // Settlement worker runs as a SEPARATE process (src/worker.js).
 // Do NOT import or start auto-settle here — it causes duplicate processing
 // when multiple HTTP server instances are deployed.
@@ -41,7 +36,6 @@ const pool = require('./config/database');
 const logger = require('./utils/logger');
 
 const app = express();
-const PENDING_ORDER_EXPIRY_INTERVAL_MS = 60_000;
 
 const routeRegistrations = [
   ['/api/auth', authRoutes],
@@ -55,12 +49,9 @@ const routeRegistrations = [
   ['/api/results', resultRoutes],
   ['/api/jantri', jantriRoutes],
   ['/api/moderators', moderatorRoutes],
-  ['/api/moderator', moderatorSelfRoutes],
   ['/api/admin', adminRoutes],
   ['/api/notifications', notificationRoutes],
   ['/api/custom-ads', customAdsRoutes],
-  ['/api/sms', smsWebhookRoutes],
-  ['/api/auto-deposit', autoDepositRoutes],
   ['/api/settlement-monitor', settlementMonitorRoutes],
   ['/api/wallet-audit', walletAuditRoutes],
   ['/api/how-to-play', howToPlayRoutes],
@@ -146,15 +137,8 @@ const financialLimiter = createRateLimiter({
 });
 app.use('/api/withdraw', financialLimiter);
 app.use('/api/bets', financialLimiter);
-// Auto-deposit: only rate-limit mutating actions (order creation / cancellation).
-// Status checks and history reads are excluded so polling doesn't trigger 429s.
-app.use('/api/auto-deposit/order', (req, res, next) => {
-  // GET /order/status/:id — read-only, skip limiter
-  if (req.method === 'GET') return next();
-  return financialLimiter(req, res, next);
-});
-app.use('/api/auto-deposit/orders', (req, res, next) => next()); // history read — skip
-app.use('/api/auto-deposit/admin', (req, res, next) => next()); // admin routes — skip
+// Deposit rate limiting: max 20 order creations per 15 minutes
+app.use('/api/deposits/create-order', financialLimiter);
 
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
@@ -206,21 +190,6 @@ initSocket(httpServer);
 redis.init();
 httpServer.listen(PORT, () => {
   logger.info('server', `Server running on port ${PORT}`);
-
-  // Expire stale deposit orders every 60 seconds
-  setInterval(async () => {
-    try {
-      const expired = await expirePendingOrders();
-      if (expired > 0) {
-        logger.info('auto-deposit', `Expired ${expired} stale deposit orders`);
-      }
-    } catch (err) {
-      logger.error('auto-deposit', 'Order expiry error', err);
-    }
-  }, PENDING_ORDER_EXPIRY_INTERVAL_MS);
-
-  // Start auto-deposit retry worker (re-matches unmatched webhook transactions every 15s)
-  startRetryWorker();
 });
 
 module.exports = { app, httpServer };

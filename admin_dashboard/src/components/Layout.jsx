@@ -8,15 +8,12 @@ const navItems = [
   { path: '/users', label: 'Users', icon: '👥' },
   { path: '/moderators', label: 'Moderators', icon: '🛡️' },
   { path: '/deposits', label: 'Deposits', icon: '💰' },
-  { path: '/auto-deposits', label: 'Auto Deposits', icon: '⚡' },
-  { path: '/upi-management', label: 'UPI Management', icon: '🏦' },
   { path: '/withdrawals', label: 'Withdrawals', icon: '🏧' },
   { path: '/bets', label: 'Bets', icon: '🎯' },
   { path: '/games', label: 'Games', icon: '🎮' },
   { path: '/results', label: 'Results', icon: '🧾' },
   { path: '/jantri', label: 'Jantri', icon: '🔢' },
   { path: '/notifications', label: 'Notifications', icon: '🔔' },
-  { path: '/fraud-logs', label: 'Fraud Alerts', icon: '🚨' },
   { path: '/system-alerts', label: 'System Alerts', icon: '⚠️' },
   { path: '/settlement-monitor', label: 'Settlement Monitor', icon: '⚙️' },
   { path: '/wallet-transactions', label: 'Wallet Transactions', icon: '🔍' },
@@ -24,14 +21,13 @@ const navItems = [
   { path: '/financial-report', label: 'Financial Report', icon: '📈' },
   { path: '/custom-ads', label: 'Custom Ads', icon: '📢' },
   { path: '/settings', label: 'Settings', icon: '🛠️' },
-  { path: '/my-scanner', label: 'My UPI / Scanner', icon: '📲' },
   { path: '/how-to-play', label: 'How To Play', icon: '🎬' },
   { path: '/referrals', label: 'Referrals', icon: '🎁' },
   { path: '/support', label: 'Support', icon: '🎫' },
 ];
 
-const MODERATOR_HIDDEN_LABELS = new Set(['Moderators', 'Games', 'Results', 'Settings', 'Fraud Alerts', 'System Alerts', 'UPI Management', 'Settlement Monitor', 'Wallet Transactions', 'Bonus Transactions', 'Financial Report', 'Wallet Audit', 'Custom Ads', 'How To Play', 'Referrals']);
-const ADMIN_HIDDEN_LABELS = new Set(['My UPI / Scanner']);
+const MODERATOR_HIDDEN_LABELS = new Set(['Moderators', 'Games', 'Results', 'Settings', 'System Alerts', 'Settlement Monitor', 'Wallet Transactions', 'Bonus Transactions', 'Financial Report', 'Wallet Audit', 'Custom Ads', 'How To Play', 'Referrals']);
+const ADMIN_HIDDEN_LABELS = new Set([]);
 
 function isNavItemActive(locationPathname, itemPath) {
   return locationPathname === itemPath || (itemPath !== '/' && locationPathname.startsWith(`${itemPath}/`));

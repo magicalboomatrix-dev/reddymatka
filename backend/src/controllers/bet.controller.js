@@ -2,7 +2,6 @@ const pool = require('../config/database');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const { canPlaceBet, getResultDate } = require('../utils/game-time');
 const { clampPagination, escapeLike } = require('../utils/pagination');
-const fraudService = require('../services/fraud.service');
 const { recordUserActivity } = require('../utils/user-activity');
 
 // Generate crossing combinations: digits A,B → "AB" and "BA" (if different)
@@ -208,9 +207,6 @@ exports.placeBet = async (req, res, next) => {
       },
       req,
     });
-
-    // Fire-and-forget fraud check — runs outside transaction, never blocks response
-    fraudService.runChecks(req.user.id, totalAmount).catch(() => {});
 
     res.status(201).json({
       message: 'Bet placed successfully.',

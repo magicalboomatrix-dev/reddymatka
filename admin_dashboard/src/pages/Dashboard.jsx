@@ -266,11 +266,11 @@ export default function Dashboard() {
         <CollapsibleSection 
           title="Operations Cockpit" 
           defaultOpen={true}
-          badge={operations.summary?.pending_withdrawals || operations.summary?.fraud_alerts ? `${(operations.summary?.pending_withdrawals || 0) + (operations.summary?.fraud_alerts || 0)}` : null}
+          badge={operations.summary?.pending_withdrawals || operations.summary?.pending_deposits ? `${(operations.summary?.pending_withdrawals || 0) + (operations.summary?.pending_deposits || 0)}` : null}
         >
           <div className="space-y-4">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <QuickAction 
                 icon="🏧" 
                 label={`Pending Withdrawals (${operations.summary?.pending_withdrawals || 0})`} 
@@ -278,21 +278,15 @@ export default function Dashboard() {
                 color="red" 
               />
               <QuickAction 
-                icon="⚡" 
-                label={`Auto Mismatches (${operations.summary?.auto_deposit_mismatches || 0})`} 
-                to="/auto-deposits?tab=unmatched" 
+                icon="💰" 
+                label={`Pending Deposits (${operations.summary?.pending_deposits || 0})`} 
+                to="/deposits?status=pending" 
                 color="purple" 
-              />
-              <QuickAction 
-                icon="🚨" 
-                label={`Fraud Alerts (${operations.summary?.fraud_alerts || 0})`} 
-                to="/fraud-logs" 
-                color="red" 
               />
             </div>
 
             {/* Queue Lists - Responsive Grid */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Pending Withdrawals */}
               <div className="bg-white border rounded-lg overflow-hidden">
                 <div className="px-3 sm:px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
@@ -324,65 +318,32 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* Auto-Deposit Mismatches */}
+              {/* Pending Deposits */}
               <div className="bg-white border rounded-lg overflow-hidden">
                 <div className="px-3 sm:px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                  <h4 className="text-sm sm:text-base font-semibold text-gray-800">Auto Mismatches</h4>
-                  <Link to="/auto-deposits?tab=unmatched" className="text-xs sm:text-sm text-blue-600 hover:underline">View All</Link>
+                  <h4 className="text-sm sm:text-base font-semibold text-gray-800">Pending Deposits</h4>
+                  <Link to="/deposits?status=pending" className="text-xs sm:text-sm text-blue-600 hover:underline">View All</Link>
                 </div>
                 <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                  {(operations.queues?.auto_deposit_mismatches || []).slice(0, 5).map((row) => (
+                  {(operations.queues?.pending_deposits || []).slice(0, 5).map((row) => (
                     <div key={row.id} className="px-3 sm:px-4 py-3 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-800 font-mono truncate">{cleanDisplayText(row.reference_number)}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">{cleanDisplayText(row.payer_name)}</p>
+                          <p className="text-sm font-medium text-gray-800 font-mono truncate">{cleanDisplayText(row.order_id || `#${row.id}`)}</p>
+                          <p className="text-xs text-gray-500 mt-0.5 truncate">{cleanDisplayText(row.user_name || row.payer_name)}</p>
                           <p className="text-xs text-gray-400 mt-0.5">{new Date(row.created_at).toLocaleDateString('en-IN')}</p>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <div className="text-sm font-semibold text-amber-700">₹{Number(row.amount || 0).toLocaleString('en-IN')}</div>
-                          <div className="text-xs text-gray-500">{cleanDisplayText(row.error_message, 'Review')}</div>
+                          <div className="text-xs text-gray-500 capitalize">{cleanDisplayText(row.status, 'Pending')}</div>
                         </div>
                       </div>
                     </div>
                   ))}
-                  {!(operations.queues?.auto_deposit_mismatches || []).length && (
+                  {!(operations.queues?.pending_deposits || []).length && (
                     <div className="px-4 py-8 text-center text-sm text-gray-400">
                       <div className="text-2xl mb-2">✓</div>
-                      No mismatches
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Fraud Alerts */}
-              <div className="bg-white border rounded-lg overflow-hidden">
-                <div className="px-3 sm:px-4 py-3 border-b bg-gray-50 flex items-center justify-between">
-                  <h4 className="text-sm sm:text-base font-semibold text-gray-800">Fraud Alerts</h4>
-                  <Link to="/fraud-logs" className="text-xs sm:text-sm text-blue-600 hover:underline">View All</Link>
-                </div>
-                <div className="divide-y divide-gray-100 max-h-64 overflow-y-auto">
-                  {(operations.queues?.fraud_alerts || []).slice(0, 5).map((row) => (
-                    <div key={row.id} className="px-3 sm:px-4 py-3 hover:bg-gray-50 transition-colors">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-800 truncate">{cleanDisplayText(row.title)}</p>
-                          <p className="text-xs text-gray-500 mt-0.5 truncate">{cleanDisplayText(row.user_name, 'System')}</p>
-                          <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{cleanDisplayText(row.description, 'Needs review')}</p>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${row.severity === 'high' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                            {row.severity}
-                          </span>
-                          <div className="text-xs text-gray-400 mt-1">{new Date(row.created_at).toLocaleDateString('en-IN')}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {!(operations.queues?.fraud_alerts || []).length && (
-                    <div className="px-4 py-8 text-center text-sm text-gray-400">
-                      <div className="text-2xl mb-2">✓</div>
-                      No fraud alerts
+                      No pending deposits
                     </div>
                   )}
                 </div>
@@ -465,7 +426,7 @@ export default function Dashboard() {
       </div>
 
       {user?.role === 'admin' && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4">
           <StatCard 
             title="Deposits Count" 
             value={adminStats?.total_deposits_today || 0} 
@@ -479,12 +440,6 @@ export default function Dashboard() {
             color="blue"
             trend="up"
             trendValue={10}
-          />
-          <StatCard 
-            title="Fraud Attempts" 
-            value={adminStats?.fraud_attempts_today || 0} 
-            color="red"
-            sub={adminStats?.fraud_attempts_today > 0 ? 'Action needed' : 'All clear'}
           />
           <StatCard 
             title="Active Moderators" 

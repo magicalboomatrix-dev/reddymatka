@@ -64,7 +64,7 @@ export default function Moderators() {
   };
 
   const handleDelete = async (id) => {
-    const ok = await confirm('Archive this moderator? Their users will be unassigned and the scanner disabled. The audit trail will be preserved.', 'Archive Moderator', 'danger');
+    const ok = await confirm('Archive this moderator? Their assigned users will be unassigned.', 'Archive Moderator', 'danger');
     if (!ok) return;
     try {
       await api.delete(`/moderators/${id}`);
@@ -248,7 +248,6 @@ export default function Moderators() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Moderator</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">UPI ID</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Total Deposits</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Total Amount</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Last Deposit</th>
@@ -259,7 +258,6 @@ export default function Moderators() {
               {stats.map((stat) => (
                 <tr key={stat.moderator_id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{stat.moderator_name}</td>
-                  <td className="px-4 py-3 text-xs text-gray-600">{stat.upi_id || '-'}</td>
                   <td className="px-4 py-3 text-right">{Number(stat.total_deposits || 0).toLocaleString('en-IN')}</td>
                   <td className="px-4 py-3 text-right font-semibold text-green-700">{formatCurrency(stat.total_amount)}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{stat.last_deposit_date ? new Date(stat.last_deposit_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : '-'}</td>

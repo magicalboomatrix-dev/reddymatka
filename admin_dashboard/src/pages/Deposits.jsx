@@ -99,10 +99,16 @@ function DepositCard({ d, isAdmin, formatCurrency }) {
           <p className="text-xs text-gray-500">Payer</p>
           <p className="text-gray-700 truncate">{d.payer_name || '-'}</p>
         </div>
-        {d.webhook_txn_id && (
-          <div className="col-span-2">
-            <p className="text-xs text-gray-500">Webhook TXN</p>
-            <p className="font-mono text-xs text-gray-600">#{d.webhook_txn_id}</p>
+        {d.gateway_txn_id && (
+          <div>
+            <p className="text-xs text-gray-500">Gateway TXN</p>
+            <p className="font-mono text-xs text-gray-700 truncate">#{d.gateway_txn_id}</p>
+          </div>
+        )}
+        {d.payment_method && (
+          <div>
+            <p className="text-xs text-gray-500">Method</p>
+            <p className="text-xs text-gray-700 uppercase">{d.payment_method}</p>
           </div>
         )}
         {isAdmin && d.moderator_id && (
@@ -368,7 +374,7 @@ export default function Deposits() {
             <thead className="bg-gray-50 border-b">
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Deposit</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Order/Webhook</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Order / Gateway Ref</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">User</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Amount</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">UTR / Payer</th>
@@ -399,9 +405,10 @@ export default function Deposits() {
                       <span className="font-mono font-medium text-gray-700">#{d.id}</span>
                     </td>
                     <td className="px-4 py-3">
-                      {d.order_id && <div className="text-xs text-gray-500">Order #{d.order_id}</div>}
-                      {d.webhook_txn_id && <div className="text-xs text-gray-400 font-mono">Webhook #{d.webhook_txn_id}</div>}
-                      {!d.order_id && !d.webhook_txn_id && <span className="text-gray-400">-</span>}
+                      {d.order_id && <div className="text-xs font-mono font-medium text-gray-700">{d.order_id}</div>}
+                      {d.gateway_txn_id && <div className="text-xs text-gray-400 font-mono">TXN: #{d.gateway_txn_id}</div>}
+                      {d.payment_method && <span className="inline-block mt-0.5 px-1.5 py-0.5 text-[10px] uppercase font-semibold bg-gray-100 text-gray-600 rounded">{d.payment_method}</span>}
+                      {!d.order_id && !d.gateway_txn_id && <span className="text-gray-400">-</span>}
                     </td>
                     <td className="px-4 py-3">
                       <Link to={`/users/${d.user_id}`} className="text-blue-600 hover:underline font-medium">{d.user_name}</Link>

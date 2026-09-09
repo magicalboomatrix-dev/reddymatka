@@ -173,7 +173,6 @@ function GamePageInner() {
       unsubscribeFromGame(socket, gameId)
       disconnectSocket()
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameId])
 
   // Removed toggleFavorite function
