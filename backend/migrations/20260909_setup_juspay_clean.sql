@@ -63,11 +63,34 @@ CREATE TABLE `deposits` (
 DROP TABLE IF EXISTS `moderator_scanner_audit_logs`;
 DROP TABLE IF EXISTS `fraud_alerts`;
 
--- 6. Clean up obsolete payment/scanner columns on users table if present
-ALTER TABLE `users`
-  DROP COLUMN IF EXISTS `scanner_label`,
-  DROP COLUMN IF EXISTS `scanner_enabled`,
-  DROP COLUMN IF EXISTS `upi_id`;
+-- 6. Clean up obsolete payment/scanner columns on users table if present (universal MySQL & MariaDB compatibility)
+SET @drop_col1 = (
+  SELECT IF(COUNT(*) > 0, 'ALTER TABLE `users` DROP COLUMN `scanner_label`', 'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'scanner_label'
+);
+PREPARE stmt_c1 FROM @drop_col1;
+EXECUTE stmt_c1;
+DEALLOCATE PREPARE stmt_c1;
+
+SET @drop_col2 = (
+  SELECT IF(COUNT(*) > 0, 'ALTER TABLE `users` DROP COLUMN `scanner_enabled`', 'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'scanner_enabled'
+);
+PREPARE stmt_c2 FROM @drop_col2;
+EXECUTE stmt_c2;
+DEALLOCATE PREPARE stmt_c2;
+
+SET @drop_col3 = (
+  SELECT IF(COUNT(*) > 0, 'ALTER TABLE `users` DROP COLUMN `upi_id`', 'SELECT 1')
+  FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'upi_id'
+);
+PREPARE stmt_c3 FROM @drop_col3;
+EXECUTE stmt_c3;
+DEALLOCATE PREPARE stmt_c3;
+
 
 -- 7. Drop obsolete experimental tables if present
 DROP TABLE IF EXISTS `aviator_bets`;
