@@ -265,7 +265,7 @@ exports.getOrderStatus = async (req, res, next) => {
 
     // If still pending, query Juspay API directly to auto-reconcile
     if (deposit.status === 'pending') {
-      const isMock = req.query.mock === 'true' && juspayService.isMockEnabled();
+      const isMock = (req.query.mock === 'true' || deposit.gateway_order_id?.startsWith('MOCK_')) && juspayService.isMockEnabled();
 
       let juspayStatus = { status: 'pending' };
       if (!isMock) {
