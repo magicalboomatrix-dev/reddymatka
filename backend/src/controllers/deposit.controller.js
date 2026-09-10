@@ -265,12 +265,14 @@ exports.getOrderStatus = async (req, res, next) => {
 
     // If still pending, query Juspay API directly to auto-reconcile
     if (deposit.status === 'pending') {
-      const juspayStatus = await juspayService.getOrderStatus(orderId);
+      const isMock = req.query.mock === 'true' && juspayService.isMockEnabled();
 
-      // Support sandbox mock testing auto-credit ONLY in non-production with ENABLE_MOCK_PAYMENTS=true
-      const isMockSuccess = req.query.mock === 'true' && process.env.NODE_ENV !== 'production' && process.env.ENABLE_MOCK_PAYMENTS === 'true';
+      let juspayStatus = { status: 'pending' };
+      if (!isMock) {
+        juspayStatus = await juspayService.getOrderStatus(orderId);
+      }
 
-      if (juspayStatus.status === 'completed' || isMockSuccess) {
+      if (juspayStatus.status === 'completed' || isMock) {
         await finalizeDepositCredit({
           depositId: deposit.id,
           orderId: deposit.order_id,
@@ -279,7 +281,7 @@ exports.getOrderStatus = async (req, res, next) => {
           gatewayTxnId: juspayStatus.gatewayTxnId || `MOCK_TXN_${Date.now()}`,
           utrNumber: juspayStatus.utrNumber || `UTR${Date.now()}`,
           paymentMethod: juspayStatus.paymentMethod || 'UPI',
-          rawResponse: juspayStatus.raw || { simulated: true },
+          rawResponse: juspayStatus.raw || { simulated: true, mock: true },
         });
         deposit.status = 'completed';
       } else if (juspayStatus.status === 'failed') {

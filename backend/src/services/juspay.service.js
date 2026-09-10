@@ -11,26 +11,54 @@ class JuspayService {
     this.partnerCode = process.env.JUSPAY_PARTNER_CODE || 'RDM';
   }
 
-  getAuthHeader() {
-    return 'Basic ' + Buffer.from(`${this.apiKey}:`).toString('base64');
+  isMockEnabled() {
+    return process.env.ENABLE_MOCK_PAYMENTS === 'true' || process.env.ENABLE_MOCK_PAYMENTS === '1';
   }
 
-  getHeaders() {
-    return {
+  getBaseUrl() {
+    return process.env.JUSPAY_BASE_URL || this.baseUrl || 'https://sandbox.juspay.in';
+  }
+
+  getApiKey() {
+    return process.env.JUSPAY_API_KEY || this.apiKey || '';
+  }
+
+  getMerchantCode() {
+    return process.env.JUSPAY_MERCHANT_CODE || this.merchantCode || '';
+  }
+
+  getPartnerCode() {
+    return process.env.JUSPAY_PARTNER_CODE || this.partnerCode || '';
+  }
+
+  getAuthHeader() {
+    const key = this.getApiKey();
+    return 'Basic ' + Buffer.from(`${key}:`).toString('base64');
+  }
+
+  getHeaders(customerId = null) {
+    const headers = {
       'Authorization': this.getAuthHeader(),
-      'x-merchantid': this.merchantCode,
-      'x-partner-id': this.partnerCode,
-      'x-partner-code': this.partnerCode,
+      'x-merchantid': this.getMerchantCode(),
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     };
+    if (customerId) {
+      headers['x-routing-id'] = String(customerId);
+    }
+    const partner = this.getPartnerCode();
+    if (partner) {
+      headers['x-partner-id'] = partner;
+      headers['x-partner-code'] = partner;
+    }
+    return headers;
   }
 
-  async _request(urlPath, method = 'GET', data = null) {
-    const fullUrl = new URL(urlPath, this.baseUrl);
+  async _request(urlPath, method = 'GET', data = null, customerId = null) {
+    const fullUrl = new URL(urlPath, this.getBaseUrl());
     const options = {
       method,
-      headers: this.getHeaders(),
+      headers: this.getHeaders(customerId),
       timeout: 15000,
     };
 
@@ -67,6 +95,26 @@ class JuspayService {
    * Create an order / checkout session with Juspay
    */
   async createPaymentOrder({ orderId, amount, customerId, customerPhone, customerEmail, returnUrl }) {
+    // If mock payments are explicitly enabled, immediately return a simulated checkout redirect
+    if (this.isMockEnabled()) {
+      logger.info('juspay', `ENABLE_MOCK_PAYMENTS is active. Generating mock checkout session for order ${orderId} (amount: ${amount})`);
+      const fallbackUrl = `${returnUrl.split('?')[0]}?order_id=${encodeURIComponent(orderId)}&status=CHARGED&mock=true`;
+      return {
+        success: true,
+        orderId,
+        gatewayOrderId: `MOCK_${orderId}`,
+        paymentUrl: fallbackUrl,
+        sdkPayload: null,
+        isMock: true,
+      };
+    }
+
+    const apiKey = this.getApiKey();
+    const merchantCode = this.getMerchantCode();
+    if (!apiKey || !merchantCode) {
+      throw new Error('Juspay credentials missing. Please set JUSPAY_API_KEY and JUSPAY_MERCHANT_CODE in .env or set ENABLE_MOCK_PAYMENTS=true');
+    }
+
     const payload = {
       order_id: String(orderId),
       amount: parseFloat(amount).toFixed(2),
@@ -75,22 +123,26 @@ class JuspayService {
       customer_phone: String(customerPhone || '9876543210').slice(-10),
       customer_email: customerEmail || `user_${customerId}@reddymatka.com`,
       return_url: returnUrl,
-      payment_page_client_id: this.merchantCode,
-      merchant_code: this.merchantCode,
-      partner_code: this.partnerCode,
+      payment_page_client_id: merchantCode,
+      merchant_code: merchantCode,
       action: 'paymentPage',
       description: `Deposit for Order #${orderId}`,
     };
 
+    const partnerCode = this.getPartnerCode();
+    if (partnerCode) {
+      payload.partner_code = partnerCode;
+    }
+
     logger.info('juspay', `Creating payment order ${orderId} for amount ${amount}`, {
-      merchantCode: this.merchantCode,
-      partnerCode: this.partnerCode,
-      baseUrl: this.baseUrl,
+      merchantCode,
+      partnerCode,
+      baseUrl: this.getBaseUrl(),
     });
 
     try {
       // First attempt Hypercheckout /session endpoint
-      const res = await this._request('/session', 'POST', payload);
+      const res = await this._request('/session', 'POST', payload, customerId);
 
       if (res.status >= 200 && res.status < 300 && res.data) {
         const paymentUrl = res.data.payment_links?.web ||
@@ -111,7 +163,7 @@ class JuspayService {
 
       // If /session returned an error, try standard /orders endpoint
       if (res.status === 404 || res.status === 405) {
-        const orderRes = await this._request('/orders', 'POST', payload);
+        const orderRes = await this._request('/orders', 'POST', payload, customerId);
         if (orderRes.status >= 200 && orderRes.status < 300 && orderRes.data) {
           const paymentUrl = orderRes.data.payment_links?.web ||
                              orderRes.data.payment_links?.mobile ||
@@ -131,9 +183,8 @@ class JuspayService {
 
       logger.warn('juspay', `Juspay API response not OK: HTTP ${res.status}`, { data: res.data });
 
-      // In development / sandbox testing ONLY with explicit ENABLE_MOCK_PAYMENTS=true:
-      // provide a testing simulation redirect to allow local integration testing.
-      if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_MOCK_PAYMENTS === 'true') {
+      // If mock payments enabled as fallback on gateway error
+      if (this.isMockEnabled()) {
         logger.info('juspay', 'Providing testing simulation session for sandbox testing');
         const fallbackUrl = `${returnUrl.split('?')[0]}?order_id=${encodeURIComponent(orderId)}&status=CHARGED&mock=true`;
         return {
@@ -147,11 +198,15 @@ class JuspayService {
         };
       }
 
-      throw new Error(res.data?.error_info?.user_message || res.data?.error_info?.developer_message || `Juspay error HTTP ${res.status}`);
+      const errMsg = res.data?.error_info?.developer_message ||
+                     res.data?.error_info?.user_message ||
+                     res.data?.message ||
+                     `Juspay error HTTP ${res.status}`;
+      throw new Error(errMsg);
     } catch (err) {
       logger.error('juspay', `Payment order creation failed for ${orderId}: ${err.message}`);
 
-      if (process.env.NODE_ENV !== 'production' && process.env.ENABLE_MOCK_PAYMENTS === 'true') {
+      if (this.isMockEnabled()) {
         const fallbackUrl = `${returnUrl.split('?')[0]}?order_id=${encodeURIComponent(orderId)}&status=CHARGED&mock=true`;
         return {
           success: true,
@@ -172,6 +227,20 @@ class JuspayService {
    * Check order status with Juspay server-to-server
    */
   async getOrderStatus(orderId) {
+    if (this.isMockEnabled() && (String(orderId).startsWith('MOCK_') || String(orderId).startsWith('ORD_'))) {
+      return {
+        success: true,
+        orderId,
+        status: 'completed',
+        rawStatus: 'CHARGED',
+        amount: 0,
+        gatewayTxnId: `MOCK_TXN_${Date.now()}`,
+        utrNumber: `UTR${Date.now()}`,
+        paymentMethod: 'UPI',
+        raw: { simulated: true, mock: true, status: 'CHARGED' },
+      };
+    }
+
     try {
       const res = await this._request(`/orders/${encodeURIComponent(orderId)}`, 'GET');
 
