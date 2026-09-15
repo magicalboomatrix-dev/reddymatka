@@ -1,4 +1,4 @@
--- Migration: Clean removal of SMS auto-deposit tables and setup clean Juspay deposits table
+-- Migration: Clean removal of SMS auto-deposit tables and setup clean Spark Pay deposits table
 -- Date: 2026-09-09
 
 -- 1. Drop obsolete log tables
@@ -28,7 +28,7 @@ DEALLOCATE PREPARE stmt2;
 DROP TABLE IF EXISTS `upi_webhook_transactions`;
 DROP TABLE IF EXISTS `pending_deposit_orders`;
 
--- 4. Recreate clean modern deposits table for Juspay
+-- 4. Recreate clean modern deposits table for Spark Pay
 DROP TABLE IF EXISTS `deposits`;
 
 CREATE TABLE `deposits` (
@@ -38,7 +38,7 @@ CREATE TABLE `deposits` (
   `amount` decimal(12,2) NOT NULL,
   `currency` varchar(10) NOT NULL DEFAULT 'INR',
   `status` enum('pending','completed','failed','cancelled') NOT NULL DEFAULT 'pending',
-  `gateway` varchar(50) NOT NULL DEFAULT 'juspay',
+  `gateway` varchar(50) NOT NULL DEFAULT 'sparkpay',
   `gateway_order_id` varchar(100) DEFAULT NULL,
   `gateway_txn_id` varchar(100) DEFAULT NULL,
   `payment_method` varchar(50) DEFAULT NULL,

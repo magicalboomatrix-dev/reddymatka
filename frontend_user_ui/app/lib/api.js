@@ -124,7 +124,7 @@ export const betAPI = {
   recentWinners: (params = {}) => request(`/bets/recent-winners${buildQuery(params)}`),
 };
 
-// Deposits (Juspay Gateway)
+// Deposits (Spark Pay Gateway)
 export const depositAPI = {
   createOrder: (amount) => request('/deposits/create-order', { method: 'POST', body: JSON.stringify({ amount }) }),
   getOrderStatus: (orderId, params = {}) => request(`/deposits/order-status/${orderId}${buildQuery(params)}`),

@@ -15,7 +15,7 @@ const orderCreateLimiter = rateLimit({
 });
 
 // ========== USER ROUTES ==========
-// Create new deposit order to initiate Juspay checkout
+// Create new deposit order to initiate Spark Pay checkout
 router.post('/create-order', authenticate, orderCreateLimiter, depositController.createDepositOrder);
 
 // Check order status / trigger server-side reconcile
@@ -25,7 +25,7 @@ router.get('/order-status/:orderId', authenticate, depositController.getOrderSta
 router.get('/my-deposits', authenticate, depositController.getMyDeposits);
 
 // ========== WEBHOOK ROUTE ==========
-// Webhook endpoint called by Juspay server
+// Webhook endpoint called by Spark Pay server
 router.post('/webhook', depositController.handleWebhook);
 
 // ========== ADMIN / MODERATOR ROUTES ==========

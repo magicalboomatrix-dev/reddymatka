@@ -1,9 +1,9 @@
 /**
- * Deposit Controller for Juspay Payment Gateway
+ * Deposit Controller for Spark Pay Payment Gateway
  */
 
 const pool = require('../config/database');
-const juspayService = require('../services/juspay.service');
+const sparkpayService = require('../services/sparkpay.service');
 const { clampPagination } = require('../utils/pagination');
 const { recordWalletTransaction } = require('../utils/wallet-ledger');
 const eventBus = require('../utils/event-bus');
@@ -34,7 +34,7 @@ function getFrontendBaseUrl() {
 
 /**
  * POST /api/deposits/create-order
- * User creates a new deposit order to initiate payment via Juspay
+ * User creates a new deposit order to initiate payment via Spark Pay
  */
 exports.createDepositOrder = async (req, res, next) => {
   try {
@@ -72,24 +72,25 @@ exports.createDepositOrder = async (req, res, next) => {
     // Create pending deposit record in database
     await pool.query(
       `INSERT INTO deposits (user_id, order_id, amount, currency, status, gateway)
-       VALUES (?, ?, ?, 'INR', 'pending', 'juspay')`,
+       VALUES (?, ?, ?, 'INR', 'pending', 'sparkpay')`,
       [userId, orderId, parsedAmount]
     );
 
-    // Call Juspay to initiate checkout session
-    const paymentSession = await juspayService.createPaymentOrder({
+    // Call Spark Pay to initiate payin intent session
+    const paymentSession = await sparkpayService.createPaymentOrder({
       orderId,
       amount: parsedAmount,
       customerId: userId,
       customerPhone: user.phone,
-      customerEmail: `${user.phone}@reddymatka.com`,
+      customerName: user.name || `User ${userId}`,
+      remarks: `DEP${userId}`,
       returnUrl,
     });
 
-    // Update deposit record with payment URL and gateway order ID
+    // Update deposit record with payment/intent URL and gateway order ID
     await pool.query(
       'UPDATE deposits SET gateway_order_id = ?, payment_url = ? WHERE order_id = ?',
-      [paymentSession.gatewayOrderId, paymentSession.paymentUrl, orderId]
+      [paymentSession.gatewayOrderId, paymentSession.intentUrl || paymentSession.paymentUrl, orderId]
     );
 
     try {
@@ -101,8 +102,10 @@ exports.createDepositOrder = async (req, res, next) => {
       orderId,
       amount: parsedAmount,
       currency: 'INR',
-      paymentUrl: paymentSession.paymentUrl,
-      sdkPayload: paymentSession.sdkPayload,
+      intentUrl: paymentSession.intentUrl,
+      paymentUrl: paymentSession.paymentUrl || paymentSession.intentUrl,
+      merchantVpa: paymentSession.merchantVpa,
+      sdkPayload: paymentSession.sdkPayload || null,
       isMock: !!paymentSession.isMock,
     });
   } catch (error) {
@@ -161,7 +164,7 @@ async function finalizeDepositCredit({ depositId, orderId, userId, amount, gatew
       referenceType: 'deposit',
       referenceId: orderId,
       status: 'completed',
-      remark: `Deposit via Juspay (${orderId})`,
+      remark: `Deposit via Spark Pay (${orderId})`,
     });
 
     // Create user notification
@@ -232,7 +235,7 @@ async function finalizeDepositCredit({ depositId, orderId, userId, amount, gatew
 
 /**
  * GET /api/deposits/order-status/:orderId
- * Check order status with auto-reconcile against Juspay
+ * Check order status with auto-reconcile against Spark Pay
  */
 exports.getOrderStatus = async (req, res, next) => {
   try {
@@ -263,28 +266,30 @@ exports.getOrderStatus = async (req, res, next) => {
       return res.status(403).json({ error: 'Unauthorized.' });
     }
 
-    // If still pending, query Juspay API directly to auto-reconcile
+    // If still pending, query Spark Pay API directly to auto-reconcile
     if (deposit.status === 'pending') {
-      const isMock = (req.query.mock === 'true' || deposit.gateway_order_id?.startsWith('MOCK_')) && juspayService.isMockEnabled();
+      const isMock = (req.query.mock === 'true' || deposit.gateway_order_id?.startsWith('MOCK_')) && sparkpayService.isMockEnabled();
 
-      let juspayStatus = { status: 'pending' };
+      let sparkpayStatus = { status: 'pending' };
       if (!isMock) {
-        juspayStatus = await juspayService.getOrderStatus(orderId);
+        sparkpayStatus = await sparkpayService.getOrderStatus(orderId);
       }
 
-      if (juspayStatus.status === 'completed' || isMock) {
+      if (sparkpayStatus.status === 'completed' || isMock) {
         await finalizeDepositCredit({
           depositId: deposit.id,
           orderId: deposit.order_id,
           userId: deposit.user_id,
           amount: deposit.amount,
-          gatewayTxnId: juspayStatus.gatewayTxnId || `MOCK_TXN_${Date.now()}`,
-          utrNumber: juspayStatus.utrNumber || `UTR${Date.now()}`,
-          paymentMethod: juspayStatus.paymentMethod || 'UPI',
-          rawResponse: juspayStatus.raw || { simulated: true, mock: true },
+          gatewayTxnId: sparkpayStatus.gatewayTxnId || `MOCK_TXN_${Date.now()}`,
+          utrNumber: sparkpayStatus.utrNumber || `UTR${Date.now()}`,
+          paymentMethod: sparkpayStatus.paymentMethod || 'UPI',
+          rawResponse: sparkpayStatus.raw || { simulated: true, mock: true },
         });
         deposit.status = 'completed';
-      } else if (juspayStatus.status === 'failed') {
+        deposit.utr_number = sparkpayStatus.utrNumber || deposit.utr_number;
+        deposit.gateway_txn_id = sparkpayStatus.gatewayTxnId || deposit.gateway_txn_id;
+      } else if (sparkpayStatus.status === 'failed') {
         await pool.query('UPDATE deposits SET status = ? WHERE id = ?', ['failed', deposit.id]);
         deposit.status = 'failed';
       }
@@ -302,14 +307,14 @@ exports.getOrderStatus = async (req, res, next) => {
 
 /**
  * POST /api/deposits/webhook
- * Receives real-time payment notifications from Juspay
+ * Receives real-time payment notifications from Spark Pay
  */
 exports.handleWebhook = async (req, res) => {
   try {
     const payload = req.body;
-    logger.info('deposit-webhook', 'Received Juspay webhook payload', { payload });
+    logger.info('deposit-webhook', 'Received Spark Pay webhook payload', { payload });
 
-    const parsed = juspayService.parseWebhookPayload(payload);
+    const parsed = sparkpayService.parseWebhookPayload(payload);
     if (!parsed || !parsed.orderId) {
       logger.warn('deposit-webhook', 'Ignored invalid webhook payload: missing orderId');
       return res.status(200).json({ status: 'ignored', reason: 'Missing order_id' });

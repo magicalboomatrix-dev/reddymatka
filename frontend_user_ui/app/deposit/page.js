@@ -82,11 +82,19 @@ const DepositPage = () => {
     setLoading(true)
     try {
       const res = await depositAPI.createOrder(parsed)
-      if (res.paymentUrl) {
-        // Redirect user to the secure Juspay payment checkout
-        window.location.href = res.paymentUrl
+      const payUrl = res.intentUrl || res.paymentUrl
+      if (payUrl) {
+        const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+        router.push(`/deposit/status?order_id=${encodeURIComponent(res.orderId)}&intent=${encodeURIComponent(payUrl)}`)
+
+        // On mobile, trigger the UPI intent to launch installed UPI apps
+        if (isMobile && payUrl.startsWith('upi://')) {
+          setTimeout(() => {
+            window.location.href = payUrl
+          }, 200)
+        }
       } else {
-        throw new Error('No payment URL received from gateway')
+        throw new Error('No payment details received from gateway')
       }
     } catch (err) {
       setError(err.message || 'Failed to initialize payment. Please try again.')
@@ -166,7 +174,7 @@ const DepositPage = () => {
                     <span className="text-lg">🔒</span>
                     <div>
                       <p className="text-xs font-bold text-gray-800">100% Secure Payment</p>
-                      <p className="text-[10px] text-gray-500">Powered by Juspay Payment Gateway</p>
+                      <p className="text-[10px] text-gray-500">Powered by Spark Pay Gateway</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 text-[11px] font-semibold text-green-700">
