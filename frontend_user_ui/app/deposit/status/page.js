@@ -16,8 +16,18 @@ function StatusContent() {
   const [error, setError] = useState('')
   const [walletBalance, setWalletBalance] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [showQr, setShowQr] = useState(false)
   const pollTimerRef = useRef(null)
   const pollCountRef = useRef(0)
+
+  useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      setIsMobile(mobile)
+      setShowQr(!mobile) // Show QR by default on desktop, hide on mobile
+    }
+  }, [])
 
   const checkStatus = async (isManual = false) => {
     if (!orderId) return
@@ -177,25 +187,9 @@ function StatusContent() {
               </div>
             </div>
 
-            {/* UPI QR Code */}
-            {intentUrl && (
-              <div className="my-4 flex flex-col items-center justify-center">
-                <div className="rounded-xl border-2 border-[#d6b774] bg-white p-2.5 shadow-sm">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(intentUrl)}`}
-                    alt="UPI Payment QR Code"
-                    className="h-44 w-44 object-contain"
-                  />
-                </div>
-                <span className="mt-2 text-[11px] font-medium text-gray-500">
-                  Scan QR with PhonePe, GPay, Paytm, or CRED
-                </span>
-              </div>
-            )}
-
             {/* Direct UPI App Buttons */}
             {intentUrl && (
-              <div className="mt-3 space-y-2">
+              <div className="my-3 space-y-2">
                 <a
                   href={intentUrl}
                   className="flex h-11 w-full items-center justify-center rounded-lg bg-[#111] text-sm font-bold text-white shadow hover:bg-black transition-colors"
@@ -224,13 +218,38 @@ function StatusContent() {
                   </a>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={handleCopyUPI}
-                  className="w-full text-center text-[11px] font-medium text-gray-500 hover:text-gray-800 pt-1"
-                >
-                  {copied ? '✓ UPI Link Copied!' : '📋 Copy UPI Payment Link'}
-                </button>
+                <div className="flex items-center justify-between pt-1 px-1 text-[11px] text-gray-500">
+                  <button
+                    type="button"
+                    onClick={handleCopyUPI}
+                    className="font-medium hover:text-gray-800"
+                  >
+                    {copied ? '✓ UPI Link Copied!' : '📋 Copy UPI Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowQr(!showQr)}
+                    className="font-medium text-[#92400e] hover:underline"
+                  >
+                    {showQr ? '▲ Hide QR Code' : '📷 Show QR Code'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* UPI QR Code (shown on desktop or when toggled on mobile) */}
+            {intentUrl && showQr && (
+              <div className="my-3 flex flex-col items-center justify-center rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+                <div className="rounded-xl border-2 border-[#d6b774] bg-white p-2.5 shadow-sm">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(intentUrl)}`}
+                    alt="UPI Payment QR Code"
+                    className="h-44 w-44 object-contain"
+                  />
+                </div>
+                <span className="mt-2 text-[11px] font-medium text-gray-500">
+                  Scan QR with PhonePe, GPay, Paytm, or CRED
+                </span>
               </div>
             )}
 
