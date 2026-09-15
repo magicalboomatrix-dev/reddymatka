@@ -237,7 +237,15 @@ const DepositPage = () => {
                 </thead>
                 <tbody>
                   {depositHistory.map((order) => (
-                    <tr key={order.id} className="border-b border-[#f0e3c6] hover:bg-amber-50/40">
+                    <tr
+                      key={order.id}
+                      onClick={() => {
+                        if (order.order_id) {
+                          router.push(`/deposit/status?order_id=${encodeURIComponent(order.order_id)}`)
+                        }
+                      }}
+                      className="border-b border-[#f0e3c6] hover:bg-amber-50/60 cursor-pointer transition-colors"
+                    >
                       <td className="px-3 py-2 font-mono text-[11px] text-gray-600 truncate max-w-[100px]">
                         {order.order_id || `#${order.id}`}
                       </td>
