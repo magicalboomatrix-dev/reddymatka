@@ -6,14 +6,14 @@ const { authenticate, authorize } = require('../middleware/auth.middleware');
 const { adminActivity } = require('../middleware/admin-activity.middleware');
 const scannerUpload = require('../middleware/scanner-upload.middleware');
 
-// Rate limit: max 5 withdrawal requests per 15 minutes per user
+// Rate limit: max 30 withdrawal requests per 15 minutes per user
 const withdrawLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 30,
   keyGenerator: (req) => req.user?.id || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many withdrawal requests. Please wait.' },
+  message: { error: 'Too many withdrawal attempts. Please wait a few moments.' },
 });
 
 // User routes

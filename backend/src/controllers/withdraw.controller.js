@@ -21,7 +21,7 @@ exports.sendWithdrawOtp = async (req, res, next) => {
     // Invalidate previous unexpired withdrawal OTPs
     await pool.query(
       "UPDATE otps SET is_used = 1 WHERE phone IN (?) AND purpose = 'withdraw' AND is_used = 0",
-      [phoneCandidates]
+      [phoneCandidates.length > 0 ? phoneCandidates : [phone]]
     );
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -178,7 +178,7 @@ exports.requestWithdraw = async (req, res, next) => {
     // Verify OTP in DB
     const phoneCandidates = getPhoneCandidates(req.user.phone);
     const [otpRecords] = await conn.query(
-      `SELECT * FROM otps WHERE phone IN (?) AND purpose = 'withdraw' AND is_used = 0 AND expires_at > UTC_TIMESTAMP() ORDER BY id DESC LIMIT 1 FOR UPDATE`,
+      `SELECT * FROM otps WHERE phone IN (?) AND purpose = 'withdraw' AND is_used = 0 AND (expires_at > UTC_TIMESTAMP() OR expires_at > NOW()) ORDER BY id DESC LIMIT 1 FOR UPDATE`,
       [phoneCandidates.length > 0 ? phoneCandidates : [req.user.phone]]
     );
 

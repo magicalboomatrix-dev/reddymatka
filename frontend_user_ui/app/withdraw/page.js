@@ -37,6 +37,7 @@ const WithDrawPage = () => {
   const [previewImage, setPreviewImage] = useState(null)
   const [showOtpModal, setShowOtpModal] = useState(false)
   const [withdrawOtp, setWithdrawOtp] = useState('')
+  const [modalError, setModalError] = useState('')
   const [otpSending, setOtpSending] = useState(false)
   const [resendTimer, setResendTimer] = useState(0)
   const [pendingPayload, setPendingPayload] = useState(null)
@@ -201,37 +202,42 @@ const WithDrawPage = () => {
     setPendingPayload(payload)
     setPendingMethodLabel(methodLabel)
     setWithdrawOtp('')
+    setModalError('')
     setShowOtpModal(true)
     sendWithdrawalOtp()
   }
 
   const sendWithdrawalOtp = async () => {
     setOtpSending(true)
+    setModalError('')
     try {
       const res = await withdrawAPI.sendOtp()
       setResendTimer(60)
       setToast({ message: res.message || 'OTP sent to your registered phone number.', type: 'success' })
     } catch (err) {
+      setModalError(err.message || 'Failed to send OTP.')
       setToast({ message: err.message || 'Failed to send OTP.', type: 'error' })
     } finally {
       setOtpSending(false)
     }
   }
 
-  const handleConfirmWithdrawalWithOtp = async () => {
-    if (!withdrawOtp || withdrawOtp.trim().length !== 6) {
-      setToast({ message: 'Please enter the 6-digit OTP.', type: 'error' })
+  const handleConfirmWithdrawalWithOtp = async (codeToUse) => {
+    const code = String(codeToUse || withdrawOtp || '').trim()
+    if (!code || code.length !== 6) {
+      setModalError('Please enter the complete 6-digit OTP.')
       return
     }
 
+    setModalError('')
     setSubmitting(true)
     try {
       let finalPayload
       if (pendingPayload instanceof FormData) {
         finalPayload = pendingPayload
-        finalPayload.set('otp', withdrawOtp.trim())
+        finalPayload.set('otp', code)
       } else {
-        finalPayload = { ...pendingPayload, otp: withdrawOtp.trim() }
+        finalPayload = { ...pendingPayload, otp: code }
       }
 
       const response = await withdrawAPI.request(finalPayload)
@@ -246,7 +252,7 @@ const WithDrawPage = () => {
       setPhoneNumber('')
       setScannerImageFile(null)
       setWithdrawOtp('')
-      await fetchData()
+      fetchData().catch(() => {})
       const params = new URLSearchParams({
         type: 'withdraw',
         amount: String(successAmount),
@@ -257,7 +263,9 @@ const WithDrawPage = () => {
       })
       router.push(`/success?${params.toString()}`)
     } catch (error) {
-      setToast({ message: error.message || 'Failed to submit withdrawal request.', type: 'error' })
+      const msg = error.message || 'Failed to submit withdrawal request.'
+      setModalError(msg)
+      setToast({ message: msg, type: 'error' })
     } finally {
       setSubmitting(false)
     }
@@ -292,7 +300,13 @@ const WithDrawPage = () => {
       {/* Withdrawal OTP Verification Modal */}
       {showOtpModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleConfirmWithdrawalWithOtp()
+            }}
+            className="w-full max-w-sm rounded-xl bg-white p-5 shadow-2xl space-y-4"
+          >
             <div className="flex items-center justify-between border-b border-gray-100 pb-3">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
@@ -313,6 +327,13 @@ const WithDrawPage = () => {
               We have sent a 6-digit OTP to your registered mobile number to verify withdrawal of <span className="font-bold text-[#111]">₹{Number(amount).toLocaleString('en-IN')}</span>.
             </p>
 
+            {modalError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700 flex items-start gap-2">
+                <span className="font-bold text-red-500">✕</span>
+                <span className="flex-1 font-medium leading-tight">{modalError}</span>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5 text-center">
                 Enter 6-Digit OTP
@@ -322,9 +343,16 @@ const WithDrawPage = () => {
                 inputMode="numeric"
                 maxLength={6}
                 value={withdrawOtp}
-                onChange={(e) => setWithdrawOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+                  setWithdrawOtp(val)
+                  setModalError('')
+                  if (val.length === 6) {
+                    handleConfirmWithdrawalWithOtp(val)
+                  }
+                }}
                 placeholder="••••••"
-                className="w-full text-center tracking-[0.5em] text-2xl font-bold font-mono py-3 border-2 border-gray-300 rounded-lg focus:border-black outline-none bg-gray-50 text-[#111]"
+                className={`w-full text-center tracking-[0.5em] text-2xl font-bold font-mono py-3 border-2 ${modalError ? 'border-red-400 bg-red-50/40' : 'border-gray-300 bg-gray-50'} rounded-lg focus:border-black outline-none text-[#111]`}
                 autoFocus
               />
             </div>
@@ -352,15 +380,14 @@ const WithDrawPage = () => {
                 Cancel
               </button>
               <button
-                type="button"
+                type="submit"
                 disabled={submitting || withdrawOtp.length !== 6}
-                onClick={handleConfirmWithdrawalWithOtp}
                 className="flex-1 rounded bg-[#1d1c20] py-2.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? 'Verifying...' : 'Confirm & Withdraw'}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
