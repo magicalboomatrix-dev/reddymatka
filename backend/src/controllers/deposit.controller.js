@@ -292,6 +292,17 @@ exports.getOrderStatus = async (req, res, next) => {
       } else if (sparkpayStatus.status === 'failed') {
         await pool.query('UPDATE deposits SET status = ? WHERE id = ?', ['failed', deposit.id]);
         deposit.status = 'failed';
+      } else {
+        // Auto-expire pending orders older than 20 minutes (standard UPI intent validity)
+        const orderAgeMinutes = (Date.now() - new Date(deposit.created_at).getTime()) / (1000 * 60);
+        if (orderAgeMinutes > 20) {
+          await pool.query(
+            "UPDATE deposits SET status = 'cancelled', failure_reason = 'Payment session expired (20 min)' WHERE id = ?",
+            [deposit.id]
+          );
+          deposit.status = 'cancelled';
+          deposit.failure_reason = 'Payment session expired (20 min)';
+        }
       }
     }
 
@@ -376,13 +387,21 @@ exports.getMyDeposits = async (req, res, next) => {
     const userId = req.user.id;
     const { page, limit, offset } = clampPagination(req.query);
 
+    // Auto-expire pending orders older than 20 minutes (UPI session validity)
+    await pool.query(
+      `UPDATE deposits
+       SET status = 'cancelled', failure_reason = 'Payment session expired'
+       WHERE user_id = ? AND status = 'pending' AND created_at < NOW() - INTERVAL 20 MINUTE`,
+      [userId]
+    );
+
     const [countResult] = await pool.query(
       'SELECT COUNT(*) as total FROM deposits WHERE user_id = ?',
       [userId]
     );
 
     const [deposits] = await pool.query(
-      `SELECT id, order_id, amount, currency, status, gateway, payment_method, utr_number, created_at
+      `SELECT id, order_id, amount, currency, status, gateway, payment_method, utr_number, failure_reason, created_at
        FROM deposits
        WHERE user_id = ?
        ORDER BY created_at DESC
@@ -400,6 +419,39 @@ exports.getMyDeposits = async (req, res, next) => {
       },
     });
   } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * POST /api/deposits/cancel/:orderId
+ * User cancels a pending deposit order
+ */
+exports.cancelDepositOrder = async (req, res, next) => {
+  try {
+    const { orderId } = req.params;
+    const userId = req.user.id;
+
+    const [rows] = await pool.query(
+      'SELECT id, status FROM deposits WHERE order_id = ? AND user_id = ? LIMIT 1',
+      [orderId, userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ error: 'Deposit order not found.' });
+    }
+
+    if (rows[0].status === 'pending') {
+      await pool.query(
+        "UPDATE deposits SET status = 'cancelled', failure_reason = 'Cancelled by user' WHERE id = ?",
+        [rows[0].id]
+      );
+      return res.json({ success: true, message: 'Deposit order cancelled.' });
+    }
+
+    res.json({ success: true, status: rows[0].status });
+  } catch (error) {
+    logger.error('deposit', 'Error cancelling deposit order', error);
     next(error);
   }
 };

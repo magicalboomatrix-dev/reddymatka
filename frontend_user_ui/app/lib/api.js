@@ -128,6 +128,7 @@ export const betAPI = {
 export const depositAPI = {
   createOrder: (amount) => request('/deposits/create-order', { method: 'POST', body: JSON.stringify({ amount }) }),
   getOrderStatus: (orderId, params = {}) => request(`/deposits/order-status/${orderId}${buildQuery(params)}`),
+  cancelOrder: (orderId) => request(`/deposits/cancel/${orderId}`, { method: 'POST' }),
   getMyDeposits: (params) => request(`/deposits/my-deposits${buildQuery(params)}`),
 };
 

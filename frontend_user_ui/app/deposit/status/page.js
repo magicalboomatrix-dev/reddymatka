@@ -141,6 +141,15 @@ function StatusContent() {
     }
   }
 
+  const handleCancelOrder = async () => {
+    try {
+      if (orderId && isPending) {
+        await depositAPI.cancelOrder(orderId)
+      }
+    } catch {}
+    router.push('/deposit')
+  }
+
   return (
     <div className="mx-auto w-full max-w-md p-4">
       <div className="rounded-xl border border-[#d6b774] bg-white p-6 text-center shadow-[0_12px_28px_rgba(79,52,10,0.08)]">
@@ -331,7 +340,7 @@ function StatusContent() {
           ) : (
             <button
               type="button"
-              onClick={() => router.push('/deposit')}
+              onClick={handleCancelOrder}
               className="w-full rounded border border-gray-300 bg-white py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
             >
               Cancel / Back to Deposit

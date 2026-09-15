@@ -21,6 +21,9 @@ router.post('/create-order', authenticate, orderCreateLimiter, depositController
 // Check order status / trigger server-side reconcile
 router.get('/order-status/:orderId', authenticate, depositController.getOrderStatus);
 
+// Cancel pending deposit order
+router.post('/cancel/:orderId', authenticate, depositController.cancelDepositOrder);
+
 // User's own deposit history
 router.get('/my-deposits', authenticate, depositController.getMyDeposits);
 
