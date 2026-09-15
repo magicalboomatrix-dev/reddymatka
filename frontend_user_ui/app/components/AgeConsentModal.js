@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../lib/AuthContext';
 import { userAPI } from '../lib/api';
 
@@ -9,9 +9,18 @@ export default function AgeConsentModal() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (localStorage.getItem('age_consent_confirmed') === 'true') {
+        setDismissed(true);
+      }
+    }
+  }, []);
 
   // Only display if user is logged in AND has not yet confirmed 18+ consent
-  if (!isLoggedIn || !user) return null;
+  if (!isLoggedIn || !user || dismissed) return null;
   if (user.is_18_plus === true || user.is_18_plus === 1 || user.is_18_plus === '1') {
     return null;
   }
@@ -27,6 +36,10 @@ export default function AgeConsentModal() {
 
     try {
       await userAPI.confirmAgeConsent(true);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('age_consent_confirmed', 'true');
+      }
+      setDismissed(true);
       updateUser({ is_18_plus: true });
     } catch (err) {
       setError(err?.message || 'Failed to record age consent. Please try again.');

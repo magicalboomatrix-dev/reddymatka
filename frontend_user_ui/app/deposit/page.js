@@ -32,6 +32,11 @@ const DepositPage = () => {
   const [depositHistory, setDepositHistory] = useState([])
   const [depositLimits, setDepositLimits] = useState({ min: 100, max: 50000 })
   const [depositGuidelines, setDepositGuidelines] = useState([])
+  const [limitModal, setLimitModal] = useState({
+    isOpen: false,
+    type: 'min',
+    enteredAmount: 0,
+  })
 
   const fetchHistory = async () => {
     try {
@@ -57,25 +62,38 @@ const DepositPage = () => {
   const handleQuickAdd = (value) => {
     setAmount(String(value))
     setError('')
+    setLimitModal({ isOpen: false, type: 'min', enteredAmount: 0 })
   }
 
   const handleProceedToPay = async (e) => {
-    e.preventDefault()
+    if (e && e.preventDefault) e.preventDefault()
     setError('')
 
     const parsed = parseFloat(amount)
     if (!parsed || isNaN(parsed) || parsed <= 0) {
-      setError('Please enter a valid deposit amount')
+      setLimitModal({
+        isOpen: true,
+        type: 'invalid',
+        enteredAmount: parsed || 0,
+      })
       return
     }
 
     if (parsed < depositLimits.min) {
-      setError(`Minimum deposit amount is ₹${depositLimits.min}`)
+      setLimitModal({
+        isOpen: true,
+        type: 'min',
+        enteredAmount: parsed,
+      })
       return
     }
 
     if (parsed > depositLimits.max) {
-      setError(`Maximum deposit amount is ₹${depositLimits.max.toLocaleString('en-IN')}`)
+      setLimitModal({
+        isOpen: true,
+        type: 'max',
+        enteredAmount: parsed,
+      })
       return
     }
 
@@ -104,6 +122,81 @@ const DepositPage = () => {
 
   return (
     <div>
+      {/* Professional Deposit Limit Modal */}
+      {limitModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-amber-300 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 border border-amber-300 text-amber-700 shadow-sm">
+              <svg className="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+
+            <h3 className="text-lg font-bold text-gray-900">
+              {limitModal.type === 'min' ? 'Minimum Deposit Required' : limitModal.type === 'max' ? 'Maximum Limit Exceeded' : 'Invalid Amount'}
+            </h3>
+
+            <p className="mt-1.5 text-xs text-gray-500 leading-relaxed">
+              {limitModal.type === 'min'
+                ? `The deposit amount is below the minimum allowed limit.`
+                : limitModal.type === 'max'
+                ? `The deposit amount exceeds the maximum allowed transaction limit.`
+                : 'Please enter a valid deposit amount to proceed.'}
+            </p>
+
+            {limitModal.type === 'min' && (
+              <div className="my-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-3.5 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">You Entered:</span>
+                  <span className="font-bold text-red-600">₹{Number(limitModal.enteredAmount || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="h-px bg-amber-200/70" />
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-700 font-semibold">Minimum Required:</span>
+                  <span className="text-sm font-black text-amber-900">₹{depositLimits.min.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            )}
+
+            {limitModal.type === 'max' && (
+              <div className="my-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-3.5 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">You Entered:</span>
+                  <span className="font-bold text-red-600">₹{Number(limitModal.enteredAmount || 0).toLocaleString('en-IN')}</span>
+                </div>
+                <div className="h-px bg-amber-200/70" />
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-700 font-semibold">Maximum Allowed:</span>
+                  <span className="text-sm font-black text-amber-900">₹{depositLimits.max.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-2">
+              {limitModal.type === 'min' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAmount(String(depositLimits.min))
+                    setLimitModal({ isOpen: false, type: 'min', enteredAmount: 0 })
+                  }}
+                  className="w-full rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 py-3 text-sm font-bold text-white shadow-md hover:from-amber-700 hover:to-amber-800 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  Deposit ₹{depositLimits.min.toLocaleString('en-IN')} Instead
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setLimitModal({ isOpen: false, type: 'min', enteredAmount: 0 })}
+                className="w-full rounded-xl border border-gray-200 bg-gray-50 py-2.5 text-xs font-semibold text-gray-700 hover:bg-gray-100 active:scale-[0.98] transition-colors cursor-pointer"
+              >
+                Change Amount
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="sticky top-0 z-40 mx-auto flex w-full max-w-107.5 items-center bg-white px-4 py-3 shadow-sm">
         <button type="button" onClick={() => router.push('/home')} className="mr-3 inline-flex">
           <img alt="back" src="/images/back-btn.png" className="h-5 w-5" />
@@ -125,25 +218,43 @@ const DepositPage = () => {
               </div>
             )}
 
-            <form onSubmit={handleProceedToPay}>
+            <form onSubmit={handleProceedToPay} noValidate>
               <label className="mb-1 block text-xs font-bold text-gray-700">
                 {t(translations.deposit.enterAmount)} (₹)
               </label>
 
-              <div className="relative mb-3">
+              <div className="relative mb-2">
                 <span className="absolute left-3 top-2.5 text-base font-bold text-gray-500">₹</span>
                 <input
-                  className="h-11 w-full rounded border border-[#d8d1c4] bg-[#faf7f0] pl-8 pr-4 text-base font-semibold text-gray-800 focus:border-[#d6b774] focus:outline-none"
+                  className={`h-11 w-full rounded border bg-[#faf7f0] pl-8 pr-4 text-base font-semibold text-gray-800 transition-colors focus:outline-none ${
+                    amount && Number(amount) > 0 && Number(amount) < depositLimits.min
+                      ? 'border-amber-400 bg-amber-50/40 focus:border-amber-500'
+                      : 'border-[#d8d1c4] focus:border-[#d6b774]'
+                  }`}
                   type="number"
-                  placeholder={`Min ₹${depositLimits.min} - Max ₹${depositLimits.max}`}
+                  placeholder={`Min ₹${depositLimits.min} - Max ₹${depositLimits.max.toLocaleString('en-IN')}`}
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  min={depositLimits.min}
-                  max={depositLimits.max}
+                  onChange={(e) => {
+                    setAmount(e.target.value)
+                    if (error) setError('')
+                  }}
                   disabled={loading}
-                  required
                 />
               </div>
+
+              {/* Real-time minimum hint if entered amount is below min */}
+              {amount && Number(amount) > 0 && Number(amount) < depositLimits.min && (
+                <div className="mb-3 flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">
+                  <span className="font-medium">⚠️ Minimum required is ₹{depositLimits.min.toLocaleString('en-IN')}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAmount(String(depositLimits.min))}
+                    className="font-bold underline text-amber-900 hover:text-black cursor-pointer"
+                  >
+                    Set to ₹{depositLimits.min}
+                  </button>
+                </div>
+              )}
 
               {/* Quick Amount Selectors */}
               <div className="mb-4">

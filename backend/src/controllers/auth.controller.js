@@ -298,6 +298,7 @@ exports.completeProfile = async (req, res, next) => {
         role: 'user',
         referral_code: userReferralCode,
         moderator_id: assignedModeratorId,
+        is_18_plus: 1,
       }
     });
   } catch (error) {

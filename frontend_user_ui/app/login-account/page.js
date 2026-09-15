@@ -172,7 +172,6 @@ const LoginAccountPage = () => {
 
       if (authFlow === 'register' && data.isNewUser) {
         setStep(STEPS.PROFILE);
-        setShowDisclaimerModal(true);
       } else if (authFlow === 'firstMpinSetup' && data.resetMpin) {
         setMpin('');
         setMpinConfirm('');
@@ -194,8 +193,7 @@ const LoginAccountPage = () => {
       return;
     }
     if (!is18PlusConsent) {
-      setError('You must confirm 18+ age consent and accept the educational disclaimer.');
-      setShowDisclaimerModal(true);
+      setError('Please check the 18+ age consent box to continue.');
       return;
     }
     setError('');
@@ -221,12 +219,15 @@ const LoginAccountPage = () => {
         data = await authAPI.completeProfile(name.trim(), referralCode, mpin, tempToken, is18PlusConsent);
         // Clear moderator referral from localStorage after successful registration
         localStorage.removeItem('moderator_ref');
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('age_consent_confirmed', 'true');
+        }
       } else {
         await authAPI.resetMpin(mpin, tempToken);
         data = await authAPI.loginMpin(phone, mpin);
       }
 
-      login(data.token, data.user);
+      login(data.token, { ...data.user, is_18_plus: 1 });
       router.push('/home');
     } catch (err) {
       setError(err.message);
